@@ -14,13 +14,29 @@ curl -o docker-compose.yaml https://raw.githubusercontent.com/roon9e/webk/master
 curl -o .env https://raw.githubusercontent.com/roon9e/webk/master/.env.example
 ```
 
+Configure .env:
+```bash
+nano .env
+```
+
 Run the container and check logs:
 ```bash
 docker compose up -d
 docker compose logs -f
 ```
-Open http://localhost:80/ in your browser.
 
+Forward `PRODUCTION_PORT` to `VITE_ALLOWED_HOSTS` in reverse proxy.
+Open https://{VITE_ALLOWED_HOSTS} in your browser.
+
+### Updating
+
+Stop the container, pull latest image and check logs:
+```bash
+docker compose down
+docker compose pull
+docker compose up -d
+docker compose logs -f
+```
 
 ### Developing
 Install dependencies with:
