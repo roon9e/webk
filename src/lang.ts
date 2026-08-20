@@ -4207,7 +4207,7 @@ const lang = {
   'GroupStickers.Removed': 'Group sticker set removed',
   'GroupEmojiPack': 'Group Emoji Pack',
   'GroupEmojiPack.LinkPlaceholder': 'Emoji pack link',
-  'GroupEmojiPack.LinkInfo': 'All members will be able to use these emoji in the group, even if they don\'t have Telegram Premium.',
+  'GroupEmojiPack.LinkInfo': `All members will be able to use these emoji in the group, even if they don\'t have ${appName} Premium.`,
   'GroupEmojiPack.MyPacks': 'My emoji packs',
   'GroupEmojiPack.CreateInfo': 'You can create your own custom emoji packs using the [@stickers]() bot.',
   'GroupEmojiPack.Remove': 'Remove Group Emoji Pack',
