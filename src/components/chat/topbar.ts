@@ -664,7 +664,7 @@ export default class ChatTopbar {
       onClick: () => this.onDirectMessagesClick(),
       verify: () => this.chat.isChannel && this.chat.canManageDirectMessages && !this.chat.isMonoforum && !!(this.chat.peer as MTChat.channel).linked_monoforum_id && this.chat.type !== ChatType.Logs
     }, {
-      icon: 'statistics',
+      icon: 'statistics_filled',
       text: 'Statistics',
       onClick: () => {
         this.appSidebarRight.createTab(AppStatisticsTab).open(this.peerId.toChatId());
@@ -1490,13 +1490,16 @@ export default class ChatTopbar {
       else titleEl = i18n('PinnedMessagesCount', [count]);
 
       if(count === undefined) {
-        this.managers.appMessagesManager.getSearchCounters(
-          peerId,
-          [{_: 'inputMessagesFilterPinned'}],
-          false
-        ).then((result) => {
+        // Not `messages.getSearchCounters`: for some peers the server answers it
+        // with an `inexact` count that undercounts badly — in Saved Messages it
+        // returns 5 while 17 messages are pinned (an exact answer there needs
+        // `saved_peer_id`, which the peer-wide pinned tab has no business
+        // sending). `getPinnedMessage` reads the count off the very
+        // `inputMessagesFilterPinned` search this tab's list is built from, so
+        // the title can't disagree with what's rendered under it — the same
+        // source the official clients use for this counter.
+        this.managers.appMessagesManager.getPinnedMessage(peerId).then(({count}) => {
           if(!middleware()) return;
-          const count = result[0].count;
           this.setTitle(count);
 
           // ! костыль х2, это нужно делать в другом месте
@@ -1519,9 +1522,8 @@ export default class ChatTopbar {
         key: 'Chat.Title.Comments',
         minusFirst: this.chat.isForum
       });
-      if(count === undefined) {
+      if(count === undefined && middleware()) {
         const historyStorage = this.chat.getHistoryStorage();
-        if(!middleware()) return;
         el.compareAndUpdate(typeof(historyStorage.count) !== 'number' ?
           {key: 'Loading', args: undefined} :
           {args: [historyStorage.count - (this.chat.isForum ? 1 : 0)]}
@@ -1543,13 +1545,21 @@ export default class ChatTopbar {
         })
         // generateTitleIcons(peerId)
       ]);
+    }
 
+    // Always a callback, never `undefined` — `setPeerCallbacks` and `setTitle`
+    // both call the result unconditionally, so bailing out here used to risk a
+    // 'setTitleCallback is not a function' in the middle of a peer change.
+    return () => {
+      // A newer `setTitleManual` destroyed our helper, so it owns the title now.
+      // Without this the pinned tab could end up stuck on 'Loading': the count
+      // resolves from cache before the caller gets around to invoking this
+      // callback, and the stale 'Loading' element would overwrite the count
+      // that the inner `setTitle(count)` already painted.
       if(!middleware()) {
         return;
       }
-    }
 
-    return () => {
       replaceContent(this.title, titleEl);
       // if(icons) {
       //   this.title.append(...icons);

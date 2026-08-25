@@ -149,6 +149,11 @@ export type SearchSuperMediaCounters = {
   videos: number
 };
 
+// * a tab whose visibility follows its message counter — an empty one is hidden (see loadFirstTime)
+export function isCounterDrivenMediaTab(mediaTab: SearchSuperMediaTab) {
+  return !!mediaTab.inputFilter && mediaTab.inputFilter !== 'inputMessagesFilterEmpty';
+}
+
 type SearchSuperCommittedMediaFilterState = {
   inputFilter: SearchSuperMediaInputFilter,
   loaded: boolean,
@@ -911,7 +916,48 @@ export default class AppSearchSuper {
       }
     }
 
+    this.updateMediaTabVisibility(type);
     this.onLengthChange?.(type, count);
+  }
+
+  // * counter-driven tabs are hidden while empty (see loadFirstTime), so they have to appear
+  // * (and disappear) on the fly when their counter crosses zero
+  private updateMediaTabVisibility(type: SearchSuperMediaType) {
+    if(!this.hideEmptyTabs || this.firstLoad) {
+      return;
+    }
+
+    const mediaTab = this.mediaTabsMap.get(type);
+    if(!mediaTab || !isCounterDrivenMediaTab(mediaTab)) {
+      return;
+    }
+
+    const hide = !this.counters[type];
+    if(mediaTab.menuTab.classList.contains('hide') === hide) {
+      return;
+    }
+
+    mediaTab.menuTab.classList.toggle('hide', hide);
+
+    let needChangeActive: boolean;
+    if(hide) {
+      needChangeActive = mediaTab.menuTab.classList.contains('active');
+      mediaTab.menuTab.classList.remove('active');
+    } else {
+      // * there was nothing to select when every tab was empty
+      needChangeActive = !this.mediaTabs.some((tab) => tab.menuTab.classList.contains('active'));
+    }
+
+    this.updateContainerHidden(needChangeActive);
+
+    if(
+      needChangeActive &&
+      this.mediaTab &&
+      !this.mediaTab.menuTab.classList.contains('hide') &&
+      this.canLoadMediaTab(this.mediaTab)
+    ) {
+      this.load(true);
+    }
   }
 
   private setMediaCounters(counters: Partial<SearchSuperMediaCounters>) {
@@ -1223,6 +1269,7 @@ export default class AppSearchSuper {
       withTime: !showSender,
       fontWeight: 400,
       voiceAsMusic: true,
+      clickable: true,
       showSender,
       searchContext: this.copySearchContext(inputFilter, this.nextRates.files, false),
       lazyLoadQueue: this.lazyLoadQueue,
@@ -2110,7 +2157,7 @@ export default class AppSearchSuper {
     const createPaywall = (limit: number) => {
       const wall = document.createElement('div');
       wall.classList.add('similar-channels-paywall');
-      const btn = Button('btn-primary btn-color-primary', {icon: 'premium_unlock', text: 'UnlockSimilar'});
+      const btn = Button('btn-primary btn-color-primary', {icon: 'premium_unlock_filled', text: 'UnlockSimilar'});
       btn.classList.add('similar-channels-paywall-button');
       const onClick = () => PopupPremium.show();
       const anchor = anchorCallback(onClick);
@@ -2668,7 +2715,7 @@ export default class AppSearchSuper {
       return;
     }
 
-    const mediaTabs = this.mediaTabs.filter((mediaTab) => mediaTab.inputFilter && mediaTab.inputFilter !== 'inputMessagesFilterEmpty');
+    const mediaTabs = this.mediaTabs.filter(isCounterDrivenMediaTab);
     const filterTypes = new Set(mediaTabs.map((mediaTab) => mediaTab.inputFilter));
     if(this.mediaTabsMap.has('media')) {
       filterTypes.add('inputMessagesFilterPhotos');

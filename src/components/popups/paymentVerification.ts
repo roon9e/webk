@@ -1,6 +1,7 @@
 import PopupElement from '.';
 import appImManager from '@lib/appImManager';
 import TelegramWebView from '@components/telegramWebView';
+import getWebViewTgLink from '@helpers/getWebViewTgLink';
 
 export function createVerificationIframe(options: ConstructorParameters<typeof TelegramWebView>[0]) {
   const result = new TelegramWebView({
@@ -39,7 +40,7 @@ export default class PopupPaymentVerification extends PopupElement<{
       this.hide();
       const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
       if(this.openPathAfter) {
-        appImManager.openUrl(`https://${shortDomain}` + e.path_full);
+        appImManager.openUrl(getWebViewTgLink(e.path_full));
       }
     });
 

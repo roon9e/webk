@@ -45,11 +45,11 @@ import generateVerifiedIcon from '@components/generateVerifiedIcon';
 import {IconTsx} from './iconTsx';
 import {StoriesSegments} from '@components/avatarNew';
 import {MyDocument} from '../lib/appManagers/appDocsManager';
-import wrapEmojiText from '../lib/richTextProcessor/wrapEmojiText';
+import wrapEmojiText, {EmojiTextTsx} from '@lib/richTextProcessor/wrapEmojiText';
 import {wrapSolidComponent} from '../helpers/solid/wrapSolidComponent';
 import PopupStarGiftInfo from './popups/starGiftInfo';
 import PopupElement from './popups';
-import AppSavedMusicTab from '@components/sidebarRight/tabs/savedMusic';
+import {openSavedMusicTab} from '@components/savedMusicActions';
 import ripple from '@components/ripple';
 import {keepMe} from '@helpers/keepMe';
 import choosePhotoSize from '@appManagers/utils/photos/choosePhotoSize';
@@ -610,10 +610,7 @@ PeerProfile.PinnedMusic = () => {
 
   const openSavedMusic = (e: Event) => {
     cancelEvent(e);
-    const tab = appSidebarRight.createTab(AppSavedMusicTab);
-    tab.peerId = context.peerId;
-    tab.open();
-    appSidebarRight.toggleSidebar(true);
+    openSavedMusicTab(appSidebarRight, context.peerId);
   };
 
   const music = createMemo(() => context.hasSavedMusic ? (context.fullPeer as UserFull).saved_music as MyDocument : undefined);
@@ -624,15 +621,23 @@ PeerProfile.PinnedMusic = () => {
     <div class="profile-music-container">
       <div class="profile-music" on:click={{capture: true, handleEvent: openSavedMusic}} use:ripple>
         <div class="profile-music-inner">
-          <IconTsx icon="note" class="profile-music-icon" />
+          <IconTsx icon="note_filled" class="profile-music-icon" />
+          {/* `EmojiTextTsx` rather than a bare `wrapEmojiText`: that returns a fragment, and a
+            reactive expression handing Solid a fragment with a sibling beside it — the dash below —
+            appends the new value next to the old one instead of replacing it, so the row read as two
+            track names run together the moment the top track changed */}
           <Show when={audioAttr()?.performer}>
-            {(performer) => <span class="profile-music-performer text-overflow-no-wrap">{wrapEmojiText(performer())}</span>}
+            {(performer) => (
+              <span class="profile-music-performer text-overflow-no-wrap">
+                <EmojiTextTsx text={performer()} />
+              </span>
+            )}
           </Show>
           <span class={`profile-music-title text-overflow-no-wrap ${audioAttr()?.performer ? '' : 'only-title'}`}>
             <Show when={audioAttr()?.performer}>
               &nbsp;-&nbsp;
             </Show>
-            {wrapEmojiText(audioAttr()?.title || filenameAttr()?.file_name || '')}
+            <EmojiTextTsx text={audioAttr()?.title || filenameAttr()?.file_name || ''} />
           </span>
           <IconTsx icon="next" />
         </div>
@@ -693,7 +698,7 @@ PeerProfile.Phone = () => {
           }]
         }}
       >
-        <Row.Icon icon="phone" />
+        <Row.Icon icon="phone_filled" />
         <Row.Title>{phoneDetails().formatted}</Row.Title>
         <Row.Subtitle>{i18n(phoneDetails().isAnonymous ? 'AnonymousNumber' : 'Phone')}</Row.Subtitle>
       </Row>
@@ -731,7 +736,7 @@ PeerProfile.Username = () => {
           }]
         }}
       >
-        <Row.Icon icon="username" />
+        <Row.Icon icon="mention_filled" />
         <Row.Title>{mainUsername()}</Row.Title>
         <Row.Subtitle>{
           getUsernamesAlso(usernames()) || i18n('Username')
@@ -831,7 +836,7 @@ PeerProfile.Birthday = () => {
           }]
         }}
       >
-        <Row.Icon icon="gift" />
+        <Row.Icon icon="birthday_filled" />
         <Row.Title>{text()}</Row.Title>
         <Row.Subtitle>
           {i18n('Birthday')}
@@ -1037,7 +1042,7 @@ PeerProfile.Link = () => {
           }]
         }}
       >
-        <Row.Icon icon="link" />
+        <Row.Icon icon="link_filled" />
         <Row.Title>{toFill().url}</Row.Title>
         <Row.Subtitle>{toFill().also || i18n('SetUrlPlaceholder')}</Row.Subtitle>
         <PeerProfile.QrButton />
@@ -1060,7 +1065,7 @@ PeerProfile.BotPrivacyPolicy = () => {
   return (
     <Show when={isBot()}>
       <Row clickable={onClick}>
-        <Row.Icon icon="privacypolicy" />
+        <Row.Icon icon="policy_filled" />
         <Row.Title>{i18n('BotPrivacyPolicy')}</Row.Title>
       </Row>
     </Show>
@@ -1079,7 +1084,7 @@ PeerProfile.BotAddToChat = () => {
     <Show when={action()}>
       {(action) => (
         <Row clickable={() => showAddBotToChat({botId: context.peerId.toUserId()})}>
-          <Row.Icon icon="adduser" />
+          <Row.Icon icon="addmember_filled" />
           <Row.Title>{i18n(action().text)}</Row.Title>
           <Show when={action().about}>
             {(about) => <Row.Subtitle>{i18n(about())}</Row.Subtitle>}
@@ -1236,7 +1241,7 @@ PeerProfile.Notifications = () => {
             toggle
           />
         </Row.CheckboxFieldToggle>
-        <Row.Icon icon="unmute" />
+        <Row.Icon icon="bell_filled" />
         <Row.Title>{i18n('Notifications')}</Row.Title>
       </Row>
     </Show>
@@ -1298,7 +1303,7 @@ PeerProfile.UnofficialWarning = () => {
       <Section>
         <Row class="profile-unofficial-warning">
           <Row.Title class="pre-wrap">
-            <IconTsx icon="sendingerror" class="inline-icon inline-icon-left profile-unofficial-warning-icon" />
+            <IconTsx icon="sendingerror_filled" class="inline-icon inline-icon-left profile-unofficial-warning-icon" />
             {i18n('ProfileUnofficialSecurityRisk', [wrapEmojiText((context.peer as User.user).first_name)])}
           </Row.Title>
         </Row>

@@ -52,6 +52,7 @@ import createMiddleware from '@helpers/solid/createMiddleware';
 import {openBotPrivacyPolicy} from '@helpers/getBotPrivacyPolicy';
 import canReportBot from '@appManagers/utils/bots/canReportBot';
 import {showPeerReport} from '@components/popups/reportAd';
+import getWebViewTgLink from '@helpers/getWebViewTgLink';
 
 const SANDBOX_ATTRIBUTES = [
   'allow-scripts',
@@ -1108,8 +1109,7 @@ export default class WebApp {
         })
       },
       web_app_open_tg_link: ({path_full}) => {
-        const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
-        appImManager.openUrl(`https://${shortDomain}` + path_full);
+        appImManager.openUrl(getWebViewTgLink(path_full));
         // this.forceHide();
       },
       web_app_open_invoice: ({slug}) => {

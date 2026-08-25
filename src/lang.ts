@@ -728,8 +728,8 @@ const lang = {
     'other_value': 'boosts expire on %2$s'
   },
   'Boost.GetMoreBoosts': {
-    'one_value': `To boost **%1$s**, get **%2$d** more boost by gifting **${appName} Premium** to a friend.`,
-    'other_value': `To boost **%1$s**, get **%2$d** more boosts by gifting **${appName} Premium** to a friend.`
+    'one_value': `To boost **%2$s**, get **%1$d** more boost by gifting **${appName} Premium** to a friend.`,
+    'other_value': `To boost **%2$s**, get **%1$d** more boosts by gifting **${appName} Premium** to a friend.`
   },
   'Boost.Reassign.Description': 'To boost **%1$s**, reassign a previous boost or %2$s to a friend to get %3$s.',
   'Boost.GiftPremium': `**[gift ${appName} Premium]()**`,
@@ -1065,7 +1065,7 @@ const lang = {
   'MiniApps.Collapsed.One': '%s',
   'MiniApps.Collapsed.Two': '%s & %s',
   'MiniApps.Collapsed.Many': {
-    'other_value': '%s & %d Other'
+    'other_value': '%2$s & %1$d Other'
   },
   'PaidReaction.Sent': {
     'one_value': 'Star sent!',
@@ -1592,6 +1592,15 @@ const lang = {
   'SharedLinksTab2': 'Links',
   'SharedMusicTab2': 'Music',
   'SavedMusicTab': 'Playlist',
+  'SavedMusicTabMine': 'Your Playlist',
+  'SavedMusic.AddToProfile': 'Add to Profile',
+  'SavedMusic.RemoveFromProfile': 'Remove from Profile',
+  'SavedMusic.Sort': 'Sort',
+  'SavedMusic.Added': 'Audio added to your Profile.',
+  'SavedMusic.Removed': 'Audio removed from your Profile.',
+  'SavedMusic.RemoveConfirm': 'Do you want to remove this file from your profile?',
+  'MusicSearch.Profile': 'Profile Music',
+  'MusicSearch.Global': 'Global Search',
   'SharedVoiceTab2': 'Voice',
   // "SharedGIFsTab2": "GIFs",
   'NewPoll': 'New Poll',
@@ -2299,6 +2308,22 @@ const lang = {
   'ActionGiftTransferredOutbound': 'You transferred a gift to %s',
   'ActionGiftSold': 'You sold a gift to %s',
   'ActionGiftTransferredSelf': 'You transferred a unique collectible',
+  'ActionGiftSentChannel': {
+    'one_value': '**%2$s** sent a gift to **%3$s** for **%1$d Star**',
+    'other_value': '**%2$s** sent a gift to **%3$s** for **%1$d Stars**'
+  },
+  'ActionGiftSentChannelTon': '**%2$s** sent a gift to **%3$s** for **%1$s Grams**',
+  'ActionGiftSentSelfChannel': {
+    'one_value': 'You sent a gift to **%2$s** for **%1$d Star**',
+    'other_value': 'You sent a gift to **%2$s** for **%1$d Stars**'
+  },
+  'ActionGiftSentSelfChannelTon': 'You sent a gift to **%2$s** for **%1$s Grams**',
+  'ActionGiftUpgradedChannel': '%1$s turned this gift to %2$s into a unique collectible',
+  'ActionGiftUpgradedSelfChannel': 'You turned this gift to %s into a unique collectible',
+  'ActionGiftTransferredChannel': '%1$s transferred a gift to %2$s',
+  'ActionGiftTransferredSelfChannel': 'You transferred a gift to %s',
+  'ActionGiftUpgradedHelped': '%s unpacked the gift that you helped to upgrade.',
+  'ActionGiftUpgradedHelpedSelf': 'You unpacked the gift that %s helped to upgrade.',
   'ActionGiftPremiumTitle2': '%s Premium',
   'ActionGiftPremiumSubtitle2': `Subscription for exclusive ${appName} features.`,
   'ChatAdmin': 'admin',
@@ -3372,16 +3397,18 @@ const lang = {
   'GiftStarsSubtitle': `With Stars, **%s** will be able to unlock content and services on ${appName}.`,
   'GiftStarsSubtitleLinkName': '**See Examples >**',
   'StarGiftSentMessageIncoming': {
-    'one_value': '**%1$s** sent you a gift for **%2$d Star**',
-    'other_value': '**%1$s** sent you a gift for **%2$d Stars**'
+    'one_value': '**%2$s** sent you a gift for **%1$d Star**',
+    'other_value': '**%2$s** sent you a gift for **%1$d Stars**'
   },
+  'StarGiftSentMessageIncomingTon': '**%2$s** sent you a gift for **%1$s Grams**',
   'StarGiftSentMessageOutgoing': {
     'one_value': '**You** sent a gift for **%d Star**',
     'other_value': '**You** sent a gift for **%d Stars**'
   },
+  'StarGiftSentMessageOutgoingTon': '**You** sent a gift for **%s Grams**',
   'StarGiftSentMessagePrepaidIncoming': {
-    'one_value': '**%s** sent an upgrade worth **%d Star** for your gift',
-    'other_value': '**%s** sent an upgrade worth **%d Stars** for your gift'
+    'one_value': '**%2$s** sent an upgrade worth **%1$d Star** for your gift',
+    'other_value': '**%2$s** sent an upgrade worth **%1$d Stars** for your gift'
   },
   'StarGiftSentMessagePrepaidOutgoing': {
     'one_value': 'You sent an upgrade worth **%d Star**',
@@ -3391,7 +3418,7 @@ const lang = {
     'one_value': 'You bought a gift for **%d Star**',
     'other_value': 'You bought a gift for **%d Stars**'
   },
-  'StarGiftSentMessageSelfTon': 'You bought a gift for **%d Grams**',
+  'StarGiftSentMessageSelfTon': 'You bought a gift for **%s Grams**',
   'StarGiftFrom': 'Gift from %s',
   'StarGiftUpgradeFrom': 'Upgrade from %s',
   'StarGiftDefaultMessage': 'You can add this gift to your profile.',
@@ -3401,8 +3428,8 @@ const lang = {
     'other_value': 'Add this gift to your profile or convert it to %d Stars.'
   },
   'StarGiftDefaultMessageConvertableOut': {
-    'one_value': '%s can add this gift on their profile or convert it to %d Star.',
-    'other_value': '%s can add this gift on their profile or convert it to %d Stars.'
+    'one_value': '%2$s can add this gift on their profile or convert it to %1$d Star.',
+    'other_value': '%2$s can add this gift on their profile or convert it to %1$d Stars.'
   },
   'StarGiftDefaultMessageUpgrade': 'Upgrade this gift to a unique collectible.',
   'StarGiftDefaultMessageUpgradeOut': '%s can turn this gift into a unique collectible.',
@@ -5258,6 +5285,22 @@ const lang = {
   'Ephemeral.SendUnavailable': 'This private message can’t be sent anymore.',
   'Ephemeral.SendFailed': 'Failed to send this private message.',
   'Ephemeral.Retry': 'Retry',
+
+  'AuthSessions.View.Device': 'Device',
+  'AuthSessions.View.Application': 'Application',
+  'AuthSessions.View.System': 'System version',
+  'AuthSessions.View.Location': 'Location',
+  'AuthSessions.View.LocationInfo': 'This location estimate is based on the IP address and may not always be accurate.',
+  'AuthSessions.View.TerminateSession': 'Terminate Session',
+  'AuthSessions.View.AcceptTitle': 'Accept on This Device',
+  'AuthSessions.View.AcceptSecretChats': 'New Secret Chats',
+  'AuthSessions.View.AcceptIncomingCalls': 'Incoming Calls',
+  'AuthSessions.IncompleteAttempts': 'Incomplete login attempts',
+  'AuthSessions.IncompleteAttemptsInfo': 'These devices have no access to your account. The code was entered correctly, but no correct password was given.',
+  'AuthSessions.TerminateIfAwayTitle': 'Automatically Terminate Old Sessions',
+  'AuthSessions.TerminateIfAwayFor': 'If Inactive For',
+  'AuthSessions.RenameDevice': 'Rename current device',
+  'AuthSessions.DeviceName': 'Device name',
 
   'Apply': 'Apply'
 };

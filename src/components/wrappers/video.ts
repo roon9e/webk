@@ -32,7 +32,7 @@ import rootScope from '@lib/rootScope';
 import {ThumbCache} from '@lib/storages/thumbs';
 import animationIntersector, {AnimationItemGroup} from '@components/animationIntersector';
 import appMediaPlaybackController, {AppMediaPlaybackController, MediaSearchContext} from '@components/appMediaPlaybackController';
-import AudioElement, {findMediaTargets} from '@components/audio';
+import {DeferredMediaElement, findMediaTargets} from '@components/audio';
 import Button from '@components/button';
 import Icon from '@components/icon';
 import {createProgressRing, getProgressRingCircumference} from '@components/progressRing';
@@ -140,7 +140,7 @@ export default async function wrapVideo({doc, altDoc, container, message, boxWid
             middleware = myMiddlewareHelper.get();
           }
 
-          spanTime.append(noSoundIcon = Icon('nosound', 'video-time-icon'));
+          spanTime.append(noSoundIcon = Icon('nosound_filled', 'video-time-icon'));
         } else {
           needPlayButton = true;
         }
@@ -155,7 +155,7 @@ export default async function wrapVideo({doc, altDoc, container, message, boxWid
     }
 
     if(needPlayButton) {
-      spanPlay = Button('btn-circle video-play position-center', {icon: 'largeplay', noRipple: true});
+      spanPlay = Button('btn-circle video-play position-center', {icon: 'largeplay_filled', noRipple: true});
       container.append(spanPlay);
     }
   }
@@ -304,7 +304,7 @@ export default async function wrapVideo({doc, altDoc, container, message, boxWid
         fastRaf(onTimeUpdate);
       }, 1000, false);
 
-      const noSoundIcon = Icon('nosound', 'video-time-icon');
+      const noSoundIcon = Icon('nosound_filled', 'video-time-icon');
       const setIsPaused = (paused: boolean) => {
         divRound.classList.toggle('is-paused', paused);
         if(paused) {
@@ -395,7 +395,7 @@ export default async function wrapVideo({doc, altDoc, container, message, boxWid
 
     if(message.pFlags.is_outgoing) {
       // ! WARNING ! just to type-check
-      (divRound as any as AudioElement).onLoad = onLoad;
+      (divRound as any as DeferredMediaElement).onLoad = onLoad;
       divRound.dataset.isOutgoing = '1';
     } else {
       onLoad();
@@ -632,7 +632,7 @@ export default async function wrapVideo({doc, altDoc, container, message, boxWid
         if(spanTime) {
           spanTime.classList.add('is-error');
           const previousIcon = spanTime.querySelector('.video-time-icon');
-          const newIcon = Icon('sendingerror', 'video-time-icon');
+          const newIcon = Icon('sendingerror_filled', 'video-time-icon');
           if(previousIcon) previousIcon.replaceWith(newIcon);
           else spanTime.append(newIcon);
         }
@@ -729,7 +729,7 @@ export default async function wrapVideo({doc, altDoc, container, message, boxWid
     // container.append(button);
 
     // const updateIcon = (muted: boolean) => {
-    //   replaceButtonIcon(button, muted ? 'speakeroff' : 'speaker');
+    //   replaceButtonIcon(button, muted ? 'speakeroff_filled' : 'speaker_filled');
     // };
 
     // updateIcon(video.muted);
