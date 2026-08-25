@@ -1,0 +1,9 @@
+// ! `path_full` is whatever the frame put in a `web_app_open_tg_link` event, so it cannot be pasted
+// ! onto the bare host — a value that does not start with a slash lands in the host instead of the
+// ! path ('.evil.com/x' would build https://t.me.evil.com/x)
+
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+
+export default function getWebViewTgLink(pathFull: string) {
+  return `https://${shortDomain}/` + (pathFull || '').replace(/^\/+/, '');
+}

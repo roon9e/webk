@@ -1,16 +1,14 @@
 import type addAnchorListener from '@helpers/addAnchorListener';
 import {PHONE_NUMBER_REG_EXP} from '.';
 import {MOUNT_CLASS_TO} from '@config/debug';
-import matchUrlProtocol from '@lib/richTextProcessor/matchUrlProtocol';
+import {normalizeUrlProtocol} from '@lib/richTextProcessor/matchUrlProtocol';
 import {T_ME_PREFIXES} from '@appManagers/constants';
 
 const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
 const customProtocol = import.meta.env.VITE_APP_PROTOCOL || 'tg';
 
 export default function wrapUrl(url: string, safe?: boolean) {
-  if(!matchUrlProtocol(url)) {
-    url = 'https://' + url;
-  }
+  url = normalizeUrlProtocol(url);
 
   const out: {url: string, onclick?: Parameters<typeof addAnchorListener>[0]['name']} = {url};
   let tgMeMatch, telescoPeMatch, tgMatch;
@@ -75,12 +73,7 @@ export default function wrapUrl(url: string, safe?: boolean) {
 
           // `safe` only means the wire said webpage_id != 0 — the decoded URL itself is unvetted,
           // so run it through the same protocol filter the incoming url got above
-          let decoded = decodeURIComponent(new URL(url).searchParams.get('url'));
-          if(!matchUrlProtocol(decoded)) {
-            decoded = 'https://' + decoded;
-          }
-
-          out.url = decoded;
+          out.url = normalizeUrlProtocol(decodeURIComponent(new URL(url).searchParams.get('url')));
         } catch(err) {
           onclick = undefined;
         }
