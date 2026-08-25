@@ -65,6 +65,8 @@ import appDialogsManager from '@lib/appDialogsManager';
 import CommunityAvatar from '@components/communities/communityAvatar';
 import getPeerId from '@appManagers/utils/peers/getPeerId';
 
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+
 keepMe(ripple);
 
 type PeerProfileContextValue = {
@@ -991,7 +993,7 @@ PeerProfile.Link = () => {
 
     const usernames = getPeerActiveUsernames(context.peer as Chat.channel);
     if(context.isTopic) {
-      let url = 't.me/';
+      let url = `${shortDomain}/`;
       const threadId = getServerMessageId(context.threadId);
       const username = usernames[0];
       if(username) {
@@ -1005,7 +1007,7 @@ PeerProfile.Link = () => {
 
     if(usernames.length) {
       return {
-        url: 't.me/' + usernames[0],
+        url: `${shortDomain}/` + usernames[0],
         also: getUsernamesAlso(usernames)
       };
     }
@@ -1013,7 +1015,7 @@ PeerProfile.Link = () => {
     const exportedInvite = (context.fullPeer as ChatFull.channelFull)?.exported_invite;
     if(exportedInvite?._ === 'chatInviteExported') {
       return {
-        url: exportedInvite.link.slice(exportedInvite.link.indexOf('t.me/'))
+        url: exportedInvite.link.slice(exportedInvite.link.indexOf(`${shortDomain}/`))
       };
     }
   });
