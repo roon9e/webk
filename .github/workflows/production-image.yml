@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'tag/build-docker-image/*'
+  workflow_dispatch:
 
 permissions:
   contents: read
