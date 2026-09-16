@@ -1,5 +1,5 @@
-import {T_ME_PREFIXES} from '@appManagers/constants';
 import wrapUrl from '@lib/richTextProcessor/wrapUrl';
+import matchTelegramUrlHost from '@lib/richTextProcessor/matchTelegramUrlHost';
 import cancelEvent from '@helpers/dom/cancelEvent';
 import parseUriParams from '@helpers/string/parseUriParams';
 
@@ -71,12 +71,9 @@ export default function addAnchorListener<
     let uriParams: any;
 
     const u = new URL(href);
-    const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
-    const escapedDomain = shortDomain.replace(/\./g, '\\.');
-    const domainRegex = new RegExp(`(.+?)\\.${escapedDomain}`);
-    const match = u.host.match(domainRegex);
-    if(match && !T_ME_PREFIXES.has(match[1])) {
-      u.pathname = match[1] + (u.pathname === '/' ? '' : u.pathname);
+    const match = matchTelegramUrlHost(u);
+    if(match?.prefix) {
+      u.pathname = match.prefix + (u.pathname === '/' ? '' : u.pathname);
       href = u.toString();
     }
 

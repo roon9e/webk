@@ -38,7 +38,7 @@ function createImport() {
   runInNewContext(source, {
     __dirname: path.resolve('src/scripts'),
     require: (name: keyof typeof modules) => modules[name],
-    console: {log: vi.fn()}
+    console: {log: vi.fn(), warn: vi.fn()}
   });
 
   return {
@@ -52,17 +52,21 @@ function createImport() {
 }
 
 describe('translation import', () => {
-  it('rejects incompatible plural forms before writing either language file', () => {
+  it('skips incompatible plural forms, keeping the local text, and still applies the rest', () => {
     const {apply, files, writeFileSync} = createImport();
-    const original = {...files};
 
-    expect(() => apply([
+    apply([
       '"Greeting" = "Welcome";',
       '"Gift_one" = "%s sent %d gift";',
       '"Gift_other" = "%2$s sent %1$d gifts";'
-    ].join('\n'))).toThrow('Translation import would move the plural count out of argument 1: Gift');
-    expect(writeFileSync).not.toHaveBeenCalled();
-    expect(files).toEqual(original);
+    ].join('\n'));
+
+    expect(writeFileSync).toHaveBeenCalledTimes(1);
+    // the incompatible `Gift` plural keeps the local argument layout unchanged
+    expect(files['lang.ts']).toContain('%2$s sent %1$d gifts');
+    expect(files['lang.ts']).not.toContain('%s sent %d gift');
+    // the compatible non-plural key still imports
+    expect(files['langSign.ts']).toContain('\'Greeting\': \'Welcome\'');
   });
 
   it('imports compatible translations and ignores keys the client does not use', () => {

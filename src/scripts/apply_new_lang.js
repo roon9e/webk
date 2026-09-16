@@ -56,17 +56,18 @@ const onResponse = (response) => {
         // console.log(key, value);
       });
 
+      const importedPlurals = Object.fromEntries(Object.entries(plural).filter(([key]) => originalLang.includes(`'${key}': {`)));
+      const invalidKeys = new Set(getInvalidPluralKeys(importedPlurals));
+      if(invalidKeys.size) {
+        console.warn(`Skipping translation import for plurals that would move the plural count out of argument 1: ${[...invalidKeys].join(', ')}`);
+        for(const key of invalidKeys) delete plural[key];
+      }
+
       for(const key in plural) {
         for(const p in plural[key]) {
           const regExp = new RegExp(`('${key}':[\\s\\S]*?'${p}':\\s*')(?:[^'\\\\]+|\\\\.)*'`, 'g');
           lang = lang.replace(regExp, `$1${plural[key][p]}'`);
         }
-      }
-
-      const importedPlurals = Object.fromEntries(Object.entries(plural).filter(([key]) => originalLang.includes(`'${key}': {`)));
-      const invalidKeys = getInvalidPluralKeys(importedPlurals);
-      if(invalidKeys.length) {
-        throw new Error(`Translation import would move the plural count out of argument 1: ${invalidKeys.join(', ')}`);
       }
 
       return {filePath, lang, originalLang};
