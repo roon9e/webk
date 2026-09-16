@@ -100,4 +100,4 @@ echo "[start-preview] preview: http://localhost:$PORT"
 # modules with one).
 exec env PREVIEW_SEED="$SEED" TWEB_PREVIEW=1 TWEB_NO_WORKER="$NO_WORKER" \
   pnpm --config.verify-deps-before-run=false exec vite \
-  --config vite.preview.config.ts --port "$PORT" --strictPort
+  --config vite.preview.config.mts --port "$PORT" --strictPort

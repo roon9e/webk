@@ -59,6 +59,8 @@ import {PreloaderTsx} from '@components/putPreloader';
 import {showCreateStarGiftOfferPopup} from '@components/popups/createStarGiftOffer';
 import {getCanManagePeerGifts} from '@components/stargifts/canManageGifts';
 
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+
 function AttributeTableButton(props: {rarity: StarGiftAttributeRarity}) {
   if(props.rarity._ !== 'starGiftAttributeRarity') {
     const map: Record<Exclude<StarGiftAttributeRarity['_'], 'starGiftAttributeRarity'>, {langKey: LangPackKey, color: string}> = {
@@ -905,7 +907,7 @@ export default class PopupStarGiftInfo extends PopupElement {
 
     const handleShare = () => {
       showSharingPicker2Popup().then(({peerId, threadId, monoforumThreadId}) => {
-        rootScope.managers.appMessagesManager.sendText({peerId, threadId, replyToMonoforumPeerId: monoforumThreadId, text: 'https://t.me/nft/' + (gift as StarGift.starGiftUnique).slug});
+        rootScope.managers.appMessagesManager.sendText({peerId, threadId, replyToMonoforumPeerId: monoforumThreadId, text: `https://${shortDomain}/nft/` + (gift as StarGift.starGiftUnique).slug});
         appImManager.setInnerPeer({peerId, threadId, monoforumThreadId});
         this.hide();
       });
@@ -1062,7 +1064,7 @@ export default class PopupStarGiftInfo extends PopupElement {
                 icon: 'link',
                 text: 'CopyLink',
                 onClick: () => {
-                  copyTextToClipboard('https://t.me/nft/' + (gift as StarGift.starGiftUnique).slug);
+                  copyTextToClipboard(`https://${shortDomain}/nft/` + (gift as StarGift.starGiftUnique).slug);
                   toastNew({langPackKey: 'LinkCopied'});
                 }
               }

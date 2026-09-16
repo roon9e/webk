@@ -1,5 +1,5 @@
+import {T_ME_PREFIXES} from '@appManagers/constants';
 import wrapUrl from '@lib/richTextProcessor/wrapUrl';
-import matchTelegramUrlHost from '@lib/richTextProcessor/matchTelegramUrlHost';
 import cancelEvent from '@helpers/dom/cancelEvent';
 import parseUriParams from '@helpers/string/parseUriParams';
 
@@ -43,6 +43,9 @@ export const UNSAFE_ANCHOR_LINK_TYPES: Set<InternalLinkAnchorType> = new Set([
   'execBotCommand'
 ]);
 
+const customProtocol = import.meta.env.VITE_APP_PROTOCOL || 'tg';
+type customProtocolType = typeof customProtocol;
+
 export default function addAnchorListener<
   Params extends {
     pathnameParams?: any,
@@ -50,7 +53,7 @@ export default function addAnchorListener<
   }
 >(options: {
   name: InternalLinkAnchorType,
-  protocol?: 'tg',
+  protocol?: `${customProtocolType}`,
   callback: (params: Params & {element?: HTMLAnchorElement, masked?: boolean, event?: Event}) => any,
   noPathnameParams?: boolean,
   noUriParams?: boolean,
@@ -68,9 +71,12 @@ export default function addAnchorListener<
     let uriParams: any;
 
     const u = new URL(href);
-    const match = matchTelegramUrlHost(u);
-    if(match?.prefix) {
-      u.pathname = match.prefix + (u.pathname === '/' ? '' : u.pathname);
+    const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+    const escapedDomain = shortDomain.replace(/\./g, '\\.');
+    const domainRegex = new RegExp(`(.+?)\\.${escapedDomain}`);
+    const match = u.host.match(domainRegex);
+    if(match && !T_ME_PREFIXES.has(match[1])) {
+      u.pathname = match[1] + (u.pathname === '/' ? '' : u.pathname);
       href = u.toString();
     }
 

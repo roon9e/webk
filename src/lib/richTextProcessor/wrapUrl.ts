@@ -2,7 +2,11 @@ import type addAnchorListener from '@helpers/addAnchorListener';
 import {PHONE_NUMBER_REG_EXP} from '.';
 import {MOUNT_CLASS_TO} from '@config/debug';
 import {normalizeUrlProtocol} from '@lib/richTextProcessor/matchUrlProtocol';
-import matchTelegramUrlHost, {matchUrlHost, TELESCOPE_LINK_HOST} from '@lib/richTextProcessor/matchTelegramUrlHost';
+import {matchUrlHost, TELESCOPE_LINK_HOST} from '@lib/richTextProcessor/matchTelegramUrlHost';
+import {T_ME_PREFIXES} from '@appManagers/constants';
+
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+const customProtocol = import.meta.env.VITE_APP_PROTOCOL || 'tg';
 
 export default function wrapUrl(url: string, safe?: boolean) {
   url = normalizeUrlProtocol(url);
@@ -16,14 +20,14 @@ export default function wrapUrl(url: string, safe?: boolean) {
     parsedUrl = new URL(url);
   } catch(err) {}
 
-  const telegramUrlMatch = parsedUrl && matchTelegramUrlHost(parsedUrl);
-
-  let tgMatch;
+  let tgMatch, tgMeMatch;
   let onclick: typeof out['onclick'];
-  /* if(unsafe === 2) {
-    url = 'tg://unsafe_url?url=' + encodeURIComponent(url);
-  } else  */if(telegramUrlMatch) {
-    const {prefix} = telegramUrlMatch;
+  if((tgMeMatch = url.match(new RegExp(`^(?:${customProtocol}:(?:\\/\\/)?|(?:https?:\\/\\/)?(?:www\\.)?${shortDomain.replace(/\./g, '\\.')}\\/)(.+?)(?:\\?|$)`, 'i')))) {
+    let prefix = tgMeMatch[1];
+    if(prefix && T_ME_PREFIXES.has(tgMeMatch[1])) {
+      prefix = undefined;
+    }
+
     if(prefix) {
       parsedUrl.pathname = prefix + (parsedUrl.pathname === '/' ? '' : parsedUrl.pathname);
     }
@@ -68,7 +72,7 @@ export default function wrapUrl(url: string, safe?: boolean) {
     /^\/[^/]+\/\d+/.test(parsedUrl.pathname)
   ) {
     onclick = 'im';
-  } else if((tgMatch = url.match(/^tg:(?:\/\/)?(.+?)(?:\?|$)/))) {
+  } else if((tgMatch = url.match(new RegExp(`${customProtocol}:(?:\\/\\/)?(.+?)(?:\\?|$)`)))) {
     onclick = 'tg_' + tgMatch[1].split('/')[0] as any;
 
     switch(tgMatch[1]) {

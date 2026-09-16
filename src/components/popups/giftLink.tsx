@@ -24,6 +24,7 @@ import ListenerSetter from '@helpers/listenerSetter';
 import {getMiddleware} from '@helpers/middleware';
 
 const ANIMATION_GROUP = 'STICKERS-POPUP';
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
 
 export function shareGiftLink(url: string, openAfter?: boolean) {
   shareUrlToPeers({
@@ -56,7 +57,7 @@ export async function applyGiftCode(slug: string, button: HTMLElement, hide: () 
           anchorCallback(() => {
             simulateClickEvent(button.element);
             hide();
-            shareGiftLink('https://t.me/giftcode/' + slug);
+            shareGiftLink(`https://${shortDomain}/giftcode/` + slug);
           })
         ],
         button
@@ -109,7 +110,7 @@ export default async function showGiftLinkPopup(
 
   const isUsed = !!giftCode.used_date;
   const titleLangKey: LangPackKey = isUsed ? 'BoostingUsedGiftLink' : 'BoostingGiftLink';
-  const url = isInChat && !isUsed ? '' : 'https://t.me/giftcode/' + slug;
+  const url = isInChat && !isUsed ? '' : `https://${shortDomain}/giftcode/` + slug;
   const canUseLink = !isInChat && !isUsed;
 
   createPopup(() => {

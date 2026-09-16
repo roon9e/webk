@@ -249,12 +249,13 @@ export default function showStarsPayPopup(options: StarsPayOptions): StarsPayHan
         return result;
       })(),
       (async() => {
-        if(!transaction) return;
+if(!transaction) return;
         const peerId = getStarsTransactionMessagePeerId(transaction, ledgerPeerId || rootScope.myId, rootScope.myId);
         const mid = transaction.giveaway_post_id || transaction.msg_id;
         if(!peerId || !mid) return;
         const serverMsgId = getServerMessageId(mid);
-        return peerId.isUser() ? undefined : `https://t.me/c/${peerId.toChatId()}/${serverMsgId}`;
+        const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+        return peerId.isUser() ? undefined : `https://${shortDomain}/c/${peerId.toChatId()}/${serverMsgId}`;
       })()
     ]);
 
@@ -490,7 +491,7 @@ export default function showStarsPayPopup(options: StarsPayOptions): StarsPayHan
           if(gift) {
             const giftTitle = gift._ === 'starGiftUnique' ? `${gift.title} #${gift.num}` : gift.title || i18n('StarGiftTitle');
             const giftAnchor = gift._ === 'starGiftUnique' && anchorCallback(() => {
-              hidePopupsWithCallback(() => appImManager.openUrl(`https://t.me/nft/${gift.slug}`));
+              hidePopupsWithCallback(() => appImManager.openUrl(`https://${import.meta.env.VITE_SHORT_DOMAIN || 't.me'}/nft/${gift.slug}`));
             });
             if(giftAnchor) giftAnchor.append(giftTitle);
             tableContent.push(['StarGiftTitle', giftAnchor || giftTitle]);
