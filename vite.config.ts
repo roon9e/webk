@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import {defineConfig, searchForWorkspaceRoot} from 'vite';
+import {defineConfig, searchForWorkspaceRoot, loadEnv} from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 // @ts-ignore no type declarations
 import handlebars from 'vite-plugin-handlebars';
@@ -19,6 +19,21 @@ import watchTransformCache from './scripts/watch-transform-cache.mjs';
 import path from 'path';
 
 const rootDir = resolve(__dirname);
+
+// Branding comes from .env, which is tracked in git: the host the app answers
+// on, the product name, and the origin every absolute link is built against.
+const mode = process.env.NODE_ENV || 'development';
+const currentEnv = loadEnv(mode, process.cwd(), '');
+
+const primaryHost = (currentEnv.VITE_ALLOWED_HOSTS || 'web.telegram.org')
+  .split(',')[0]
+  .replace(/^https?:\/\//, '')
+  .replace(/\/$/, '')
+  .trim();
+
+const APP_ORIGIN = `https://${primaryHost}/`;
+const APP_URL = `${APP_ORIGIN}k/`;
+const appName = currentEnv.VITE_APP_NAME || 'Telegram';
 const certsDir = path.join(rootDir, 'certs');
 const ENV_LOCAL_FILE_PATH = path.join(rootDir, '.env.local');
 const LANG_PACK_LOCAL_FILE_PATH = path.join(rootDir, 'src', 'langPackLocalVersion.ts');
@@ -62,10 +77,10 @@ if(isDEV) {
 
 const handlebarsPlugin = handlebars({
   context: {
-    title: 'Telegram Web',
-    description: 'Telegram is a cloud-based mobile and desktop messaging app with a focus on security and speed.',
-    url: 'https://web.telegram.org/k/',
-    origin: 'https://web.telegram.org/'
+    title: `${appName} Web`,
+    description: `A private, self-hosted messaging app for ${appName}.`,
+    url: APP_URL,
+    origin: APP_ORIGIN
   }
 });
 
@@ -78,7 +93,7 @@ const USE_SELF_SIGNED_CERTS = USE_SSL && false;
 // * chmod 644 web.telegram.org-key.pem
 // * nano /etc/hosts
 // * 127.0.0.1 web.telegram.org
-const host = USE_SSL ? 'web.telegram.org' : 'localhost';
+const host = USE_SSL ? primaryHost : 'localhost';
 
 // HTTP/2 for `pnpm start`. Vite serves dev modules unbundled — one request per module —
 // and over http/1.1 the browser's ~6-connections-per-origin cap serialises the hundreds
@@ -96,6 +111,11 @@ const USE_DEV_HTTP2 = !USE_SSL && !process.env.TWEB_PREVIEW && !process.env.VITE
 
 const serverOptions: ServerOptions = {
   host,
+  // Configure dynamically assigned security hosts straight from the root
+  allowedHosts: (currentEnv.VITE_ALLOWED_HOSTS || '')
+    .split(',')
+    .map(host => host.replace(/^https?:\/\//, '').replace(/\/$/, '').trim())
+    .filter(Boolean),
   port: USE_SSL ? 443 : 8080,
   fs: {
     allow: [...SERVER_FS_ALLOW],
@@ -203,6 +223,9 @@ export default defineConfig({
       template: 'treemap'
     })) : undefined
   ].filter(Boolean),
+  define: {
+    'import.meta.env.VITE_APP_ORIGIN': JSON.stringify(APP_ORIGIN)
+  },
   test: {
     // include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     exclude: [

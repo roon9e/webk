@@ -140,6 +140,12 @@ export function applyInstantViewMediaSize(
 ) {
   const safeWidth = Number.isFinite(width) && width > 0 ? width : 3;
   const safeHeight = Number.isFinite(height) && height > 0 ? height : 2;
+  // Inline rich messages live in chat bubbles, outside the in-app browser that
+  // normally defines --browser-width; instantView.module.scss reads this to keep
+  // a media block's real box.
+  if(Number.isFinite(width) && width > 0) {
+    element.style.setProperty('--iv-media-width', width + 'px');
+  }
   element.style.setProperty('--aspect-ratio', `${safeWidth / safeHeight}`);
   element.style.setProperty('--paddings', `${paddings > 2 ? paddings : 0}`);
 }

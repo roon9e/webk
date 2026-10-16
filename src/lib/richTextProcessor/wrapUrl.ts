@@ -4,6 +4,8 @@ import {MOUNT_CLASS_TO} from '@config/debug';
 import {normalizeUrlProtocol} from '@lib/richTextProcessor/matchUrlProtocol';
 import matchTelegramUrlHost, {matchUrlHost, TELESCOPE_LINK_HOST} from '@lib/richTextProcessor/matchTelegramUrlHost';
 
+const customProtocol = import.meta.env.VITE_APP_PROTOCOL || 'tg';
+
 export default function wrapUrl(url: string, safe?: boolean) {
   url = normalizeUrlProtocol(url);
 
@@ -71,7 +73,7 @@ export default function wrapUrl(url: string, safe?: boolean) {
     /^\/[^/]+\/\d+/.test(parsedUrl.pathname)
   ) {
     onclick = 'im';
-  } else if((tgMatch = url.match(/^tg:(?:\/\/)?(.+?)(?:\?|$)/))) {
+  } else if((tgMatch = url.match(new RegExp('^' + customProtocol + ':(?:\\/\\/)?(.+?)(?:\\?|$)')))) {
     onclick = 'tg_' + tgMatch[1].split('/')[0] as any;
 
     switch(tgMatch[1]) {

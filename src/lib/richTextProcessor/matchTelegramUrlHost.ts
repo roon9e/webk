@@ -1,6 +1,7 @@
 import {T_ME_PREFIXES} from '@appManagers/constants';
 
-const TELEGRAM_LINK_HOSTS = ['t.me', 'telegram.me'];
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+const TELEGRAM_LINK_HOSTS = shortDomain === 't.me' ? ['t.me', 'telegram.me'] : [shortDomain];
 export const TELESCOPE_LINK_HOST = 'telesco.pe';
 
 /**

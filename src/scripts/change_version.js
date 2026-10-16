@@ -13,10 +13,11 @@ const LANG_PACK_VERSION_KEY = PREFIX + 'LANG_PACK_VERSION';
 
 console.log('Change version to:', {version, changelog, langVersion});
 
-const envStr = fs.readFileSync('./.env').toString();
+// `.env` is tracked in git, so a clean checkout always has it.
+const envString = fs.readFileSync('./.env', 'utf8');
 const env = {};
-envStr.split('\n').forEach(line => {
-  if(!line) return;
+envString.split('\n').forEach(line => {
+  if(!line || !/^[A-Z0-9_]+=/.test(line)) return;
   const [key, value] = line.split('=', 2);
   env[key] = value;
 });

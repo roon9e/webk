@@ -207,7 +207,7 @@ const CreateBotPopup = (props: CreateBotPopupProps) => {
               key="CreateBot.Link"
               args={[
                 <span class={styles.linkInfoLink} dir="ltr">
-                  t.me/{fullUsername()}
+                  {import.meta.env.VITE_SHORT_DOMAIN || 't.me'}/{fullUsername()}
                 </span>
               ]}
             />

@@ -1,0 +1,39 @@
+# Build context: keep it small, and keep deployment config out of the daemon.
+#
+# The builder needs sources, manifests, and the static content in public/:
+#   public/assets    36 MB of fonts/tgs/audio/img, served by nginx
+#   public/changelogs fetched at runtime by apiUpdatesManager
+# Everything else is huge, machine-local, or a credential.
+
+# Dependencies — reinstalled in the builder from the lockfile.
+node_modules
+.pnpm-store
+
+# Build output. The image builds its own bundle; carrying the committed one in
+# would let a stale bundle reach an image if the build step ever got skipped.
+dist
+
+# ...and the bundle committed under public/ is the same thing. Only the static
+# content beside it is an input to the image.
+public/*
+!public/assets
+!public/assets/**
+!public/changelogs
+!public/changelogs/**
+
+# Deployment config, and it IS tracked in git: the builder needs it (Vite reads
+# every VITE_* from it; only the branding ones are also passed as ARGs) and CI
+# has no other source. The runtime stage copies dist/, not the build context, so
+# the file stops at the builder and never reaches a runtime layer.
+!.env
+
+# VCS, CI and agent tooling state.
+.git
+.github
+.claude
+.agents
+.idea
+tmp
+archive.zip
+stats.html
+*.log

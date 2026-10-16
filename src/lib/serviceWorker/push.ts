@@ -25,6 +25,7 @@ import encodeSpoiler from '@lib/richTextProcessor/encodeSpoiler';
 const ctx = self as any as ServiceWorkerGlobalScope;
 const defaultBaseUrl = location.protocol + '//' + location.hostname + location.pathname.split('/').slice(0, -1).join('/') + '/';
 let localNotificationsAvailable = true;
+const appName = import.meta.env.VITE_APP_NAME || 'Telegram';
 
 export type EncryptedPushNotificationObject = {
   p: string | false
@@ -131,7 +132,7 @@ const defaults: PushStorage = {
   push_mute_until: 0,
   push_lang: {
     push_message_nopreview: 'You have a new message',
-    push_message_error: 'Telegram is syncing in the background...',
+    push_message_error: `${appName} is syncing in the background...`,
     push_action_mute1d: 'Mute for 24H',
     push_action_settings: 'Settings'
   },

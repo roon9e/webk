@@ -1,13 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const {execSync} = require('child_process');
+const {execFileSync} = require('child_process');
 
 const SRC_DIR = path.join(__dirname, 'src');
 const LANG_FILE_NAMES = ['lang.ts', 'langSign.ts'];
 const LANG_FILES = LANG_FILE_NAMES.map((name) => path.join(SRC_DIR, name));
 const EDIT_FILE_PATH = path.join(SRC_DIR, 'langPackLocalVersion.ts');
-const npmCmd = /^win/.test(process.platform) ? 'npm.cmd' : 'npm';
+// Run the codegen script directly instead of shelling out to `npm run format-lang`.
+// pnpm exports its own settings as npm_config_* env vars, so an npm child process
+// inherits npm_config_manage_package_manager_versions and warns "Unknown env config"
+// on every dev-server start. This repo is pnpm-only anyway (see `preinstall`), and
+// format_lang.js is cwd-independent, so invoking it with the current node binary is
+// both quieter and faster than going through a package manager.
+const FORMAT_LANG_PATH = path.join(__dirname, 'src', 'scripts', 'format_lang.js');
 
 // The version tells a client that its cached language pack is older than the local strings, so it
 // goes up only when lang.ts or langSign.ts really changed. Next to it the file keeps a hash of the
@@ -60,7 +66,7 @@ const updateVersionIfChanged = () => {
       return;
     }
 
-    execSync(`${npmCmd} run format-lang`);
+    execFileSync(process.execPath, [FORMAT_LANG_PATH], {stdio: 'inherit'});
     // written whole, then renamed into place: the dev server reloads on this file and must never read
     // it half-written
     const tmpPath = EDIT_FILE_PATH + '.tmp';

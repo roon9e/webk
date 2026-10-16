@@ -6,7 +6,9 @@ import {copyTextToClipboard} from '@helpers/clipboard';
  * toast that says what went to the clipboard.
  */
 
-export const T_ME = 'https://t.me/';
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+
+export const T_ME = `https://${shortDomain}/`;
 
 /** As `@username`. */
 export function copyUsername(username: string) {

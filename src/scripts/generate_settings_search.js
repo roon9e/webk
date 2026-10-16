@@ -130,6 +130,10 @@ const TITLE_PROPS = ['name', 'title', 'text', 'langKey', 'titleLangKey', 'label'
 const TITLE_PROP_SUFFIX = /(Text|Title)$/;
 const I18N_CALLEES = new Set(['i18n', '_i18n', 'i18n_']);
 
+// What `${appName}` reads as with no branding applied — the name `settings-links.csv`
+// (shared with the other clients) is written against.
+const DEFAULT_APP_NAME = 'Telegram';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // parsing helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,18 +223,37 @@ const findI18nKey = (node) => {
 /**
  * Top-level strings only: nested plural forms (`one_value`) are not keys, and a
  * pluralised entry is never a setting's title.
+ *
+ * A branded build writes some of these as template literals — `${appName}
+ * Premium` rather than `Telegram Premium` — so a template counts as a string
+ * too. It is read as it renders with no branding applied: `settings-links.csv`
+ * is the table shared with the other clients and its steps name the default
+ * text, so `${appName}` has to resolve to the default product name for a path
+ * like `premium` to keep finding its row.
  */
 const collectLangKeys = () => {
   const keys = new Map();
+  const stringOf = (node) => node.type === 'StringLiteral' ? node.value :
+    node.type === 'TemplateLiteral' ? node.quasis.map((q, i) =>
+      (q.value.cooked ?? q.value.raw) +
+      (i < node.expressions.length ?
+        (node.expressions[i].type === 'Identifier' && node.expressions[i].name === 'appName' ?
+          DEFAULT_APP_NAME :
+          '') :
+        '')
+    ).join('') :
+      undefined;
   for(const file of ['lang.ts', 'langSign.ts']) {
     babel.traverse(parseFile(path.join(SRC, file)), {
       VariableDeclarator(p) {
         if(p.node.id.type !== 'Identifier' || p.node.init?.type !== 'ObjectExpression') return;
         for(const prop of p.node.init.properties) {
-          if(prop.type !== 'ObjectProperty' || prop.value.type !== 'StringLiteral') continue;
+          if(prop.type !== 'ObjectProperty') continue;
+          const value = stringOf(prop.value);
+          if(value === undefined) continue;
           const key = prop.key.type === 'StringLiteral' ? prop.key.value :
             prop.key.type === 'Identifier' ? prop.key.name : null;
-          if(key) keys.set(key, prop.value.value);
+          if(key) keys.set(key, value);
         }
         p.skip();
       }

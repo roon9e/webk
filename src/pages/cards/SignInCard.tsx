@@ -165,7 +165,7 @@ export default function SignInCard(_props: {spec: Spec}) {
         });
       }
 
-      const dcs = new Set([1, 2, 3, 4, 5]);
+      const dcs = new Set([App.baseDcId]);
       const done: number[] = [nearestDcResult.this_dc];
 
       let promise: Promise<any>;
@@ -178,7 +178,7 @@ export default function SignInCard(_props: {spec: Spec}) {
       (promise || Promise.resolve()).then(() => {
         if(cancelled) return;
 
-        done.forEach((dcId) => dcs.delete(dcId));
+        done.forEach((dcId) => dcs.delete(dcId as TrueDcId));
 
         const _dcs = [...dcs];
         const g = async(): Promise<void> => {

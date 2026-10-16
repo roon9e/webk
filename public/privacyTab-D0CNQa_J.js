@@ -1,0 +1,2 @@
+import{j as e}from"./solid-NBrjMhfa.js";import{F as t}from"./applyDeviceToActiveCall-DRBVGjQE.js";var n=(n,r)=>()=>{let[i]=t();return e(()=>{i.container.classList.add(`privacy-tab`,n),r(i)}),null};export{n as t};
+//# sourceMappingURL=privacyTab-D0CNQa_J.js.map
