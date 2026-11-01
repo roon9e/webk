@@ -6,6 +6,7 @@ import getRichValueWithCaret from '@helpers/dom/getRichValueWithCaret';
 import InputField from '@components/inputField';
 import draftTextWithEntities from '@lib/richTextProcessor/draftTextWithEntities';
 import wrapDraftText from '@lib/richTextProcessor/wrapDraftText';
+import prepareTextWithEntitiesForCopying from '@helpers/prepareTextWithEntitiesForCopying';
 import type {DraftMessage, MessageEntity} from '@layer';
 import type {Editor} from '@tiptap/core';
 import {Fragment, Slice} from '@tiptap/pm/model';
@@ -14,11 +15,11 @@ import {typeTextThroughEditorView, useChatInputEditorHarness, type TiptapEditorI
 vi.mock('@environment/webpSupport', () => ({default: true}));
 vi.mock('@components/toast', () => ({toastNew: vi.fn()}));
 
-/** A paste whose clipboard holds `text` as plain text, nothing else */
-function createPasteEvent(text = '') {
+/** A paste whose clipboard holds `text` as plain text, and `html` beside it when given */
+function createPasteEvent(text = '', html = '') {
   const event = new Event('paste', {bubbles: true, cancelable: true}) as ClipboardEvent;
   Object.defineProperty(event, 'clipboardData', {
-    value: {getData: (type: string) => type === 'text/plain' ? text : ''}
+    value: {getData: (type: string) => type === 'text/plain' ? text : type === 'text/html' ? html : ''}
   });
   return event;
 }
@@ -273,6 +274,50 @@ describe('plain message field', () => {
     expect(editor.getMode()).toBe('plain');
   });
 
+  // a browser copies the block a selection ends at the start of, empty
+  test.each([
+    '<ol></ol>',
+    '<ul><li></li></ul>',
+    '<blockquote></blockquote>'
+  ])('leaves out an empty %s a copy only reached the start of', (block) => {
+    const {inputField} = mountCaption();
+    inputField.input.dispatchEvent(createPasteEvent('Some text\n\n', `<p>Some text</p>${block}<br class="Apple-interchange-newline">`));
+
+    expect(getRichValueWithCaret(inputField.input, true, false).value).toBe('Some text');
+  });
+
+  test('keeps the markers of an empty list inside what is pasted, and a checklist item\'s box anywhere', () => {
+    const {inputField} = mountCaption();
+    inputField.input.dispatchEvent(createPasteEvent('a\n\nb', '<p>a</p><ul><li></li></ul><p>b</p>'));
+    // the marker, its trailing space aside
+    expect(getRichValueWithCaret(inputField.input, true, false).value).toMatch(/^a\n- ?\nb$/);
+
+    const {inputField: checklist} = mountCaption();
+    checklist.input.dispatchEvent(createPasteEvent('a\n\n', '<p>a</p><ul><li><input type="checkbox" checked></li></ul>'));
+    expect(getRichValueWithCaret(checklist.input, true, false).value).toMatch(/^a\n- \[x\] ?$/);
+
+    // nor one that is all there is, nor in the field's own copy, which leaves out what it only reached
+    // the start of as it is copied
+    for(const [html, value] of [
+      ['<ul><li></li></ul>', /^- ?$/],
+      ['<p data-pm-slice="0 0 []">a</p><ul><li><p></p></li></ul>', /^a\n- ?$/]
+    ] as const) {
+      const {inputField: whole} = mountCaption();
+      whole.input.dispatchEvent(createPasteEvent('', html));
+      expect(getRichValueWithCaret(whole.input, true, false).value, html).toMatch(value);
+    }
+  });
+
+  test('keeps pasted paragraphs apart as their plain text does', () => {
+    const {inputField} = mountCaption();
+    inputField.input.dispatchEvent(createPasteEvent('One\n\nTwo', '<p>One</p><p>Two</p>'));
+    expect(getRichValueWithCaret(inputField.input, true, false).value).toBe('One\n\nTwo');
+
+    const {inputField: lines} = mountCaption();
+    lines.input.dispatchEvent(createPasteEvent('One\nTwo', '<p>One</p><p>Two</p>'));
+    expect(getRichValueWithCaret(lines.input, true, false).value).toBe('One\nTwo');
+  });
+
   test('keeps every line of pasted text, blank ones too', () => {
     const {inputField} = mountCaption();
     const event = createPasteEvent('one\r\n\r\n\r\ntwo');
@@ -280,6 +325,24 @@ describe('plain message field', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(getRichValueWithCaret(inputField.input, true, false).value).toBe('one\n\n\ntwo');
+  });
+
+  test('keeps the formatting of a message copied out of a chat', () => {
+    const text = 'bold\nquote\na = 1';
+    const entities: MessageEntity[] = [
+      {_: 'messageEntityBold', offset: 0, length: 4},
+      {_: 'messageEntityBlockquote', offset: 5, length: 5, pFlags: {}},
+      {_: 'messageEntityPre', offset: 11, length: 5, language: 'js'}
+    ];
+    const {html} = prepareTextWithEntitiesForCopying({text, entities});
+
+    const {editor, inputField} = mountCaption();
+    const {editor: caption} = editor as unknown as {editor: Editor};
+    caption.view.pasteHTML(html, new Event('paste', {cancelable: true}) as ClipboardEvent);
+
+    const value = getRichValueWithCaret(inputField.input, true, false);
+    expect(value.value).toBe(text);
+    expect(value.entities).toEqual(entities);
   });
 
   test('keeps the markers of a list copied out of the composer, as the list is sent', () => {

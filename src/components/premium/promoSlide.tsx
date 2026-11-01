@@ -6,7 +6,6 @@ import {PremiumPromoData} from '@components/premium/types';
 import {PremiumSubscriptionOption} from '@layer';
 import wrapRichText from '@lib/richTextProcessor/wrapRichText';
 import setInnerHTML from '@helpers/dom/setInnerHTML';
-import {onMediaCaptionClick} from '@components/mediaViewer';
 import wrapPeerTitle from '@components/wrappers/peerTitle';
 import getPeerId from '@appManagers/utils/peers/getPeerId';
 import rootScope from '@lib/rootScope';
@@ -20,8 +19,12 @@ import wrapSticker from '@components/wrappers/sticker';
 import showStickersPopup from '@components/popups/stickers';
 import PremiumOptionsForm from '@components/premium/premiumOptionsForm';
 import RowTsx from '@components/rowTsx';
+import createNewBadge from '@components/newBadge';
 import PopupElement from '@components/popups/indexTsx';
 import MediaHeader from '@components/mediaHeader';
+import SponsoredToggle from '@components/premium/sponsoredToggle';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 
 export function getGiftDetails(data: PremiumPromoData) {
   const gift = data.gift;
@@ -104,6 +107,9 @@ export default function PromoSlide(props: {
             <StatusText data={props.data} onClose={props.onClose} />
           </Show>
         </div>
+        <Show when={props.data.type === 'business' && props.data.isPremiumActive}>
+          <SponsoredToggle managers={props.data.managers} />
+        </Show>
       </div>
     </div>
   );
@@ -126,9 +132,7 @@ function PremiumFeatures(props: {
         <RowTsx clickable={() => props.onSelect(feature.feature)}>
           <RowTsx.Title>
             {i18n(feature.titleLangKey, feature.titleLangArgs)}
-            {feature.new && (
-              <span class="row-title-badge" style={{'background-color': color}}>{i18n('New')}</span>
-            )}
+            {feature.new && createNewBadge()}
           </RowTsx.Title>
           {feature.subtitleLangKey && (
             <RowTsx.Subtitle>{i18n(feature.subtitleLangKey, feature.subtitleLangArgs)}</RowTsx.Subtitle>
@@ -193,6 +197,7 @@ function Heading(props: {
   const wrapTitleOptions: PeerTitleOptions = {onlyFirstName: true};
 
   const build = async() => {
+    const managers = bindManagersToSession(rootScope.managers);
     if(giftDetails) {
       const {fromPeerId, toPeerId, isOutbound, isUnclaimed, gift} = giftDetails;
       const giftText = i18n('GiftDays', [gift.days]);
@@ -247,11 +252,11 @@ function Heading(props: {
     if(props.data.peerId && props.data.emojiStatusId) {
       const [peerTitle, doc] = await Promise.all([
         wrapPeerTitle({peerId: props.data.peerId}),
-        rootScope.managers.appEmojiManager.getCustomEmojiDocument(props.data.emojiStatusId)
+        managers.appEmojiManager.getCustomEmojiDocument(props.data.emojiStatusId)
       ]);
 
       if(doc.stickerSetInput) {
-        const stickerset = await rootScope.managers.appStickersManager.getStickerSet(doc.stickerSetInput);
+        const stickerset = await managers.appStickersManager.getStickerSet(doc.stickerSetInput);
         setTitle(i18n('TelegramPremiumPeerTitleEmojiStatus', [
           peerTitle,
           anchorCallback(() => showStickersPopup(doc.stickerSetInput, true)),
@@ -302,7 +307,7 @@ function StatusText(props: {
   let element!: HTMLDivElement;
 
   const onClick = (e: MouseEvent) => {
-    const callback = onMediaCaptionClick(element, e);
+    const callback = hotReloadGuard.onMediaCaptionClick(element, e);
     if(!callback) return;
 
     props.onClose(callback);

@@ -71,6 +71,7 @@ import {ChatType} from '@components/chat/chatType';
 import pause from '@helpers/schedulers/pause';
 import {Accessor, createMemo, createRoot, createSignal, onCleanup, onMount, Setter, Signal, useContext} from 'solid-js';
 import SelectedEffect from '@components/chat/selectedEffect';
+import {unwrapSolidElement} from '@helpers/solid/wrapSolidComponent';
 import showMakePaidPopup from '@components/popups/makePaid';
 import paymentsWrapCurrencyAmount from '@helpers/paymentsWrapCurrencyAmount';
 import Icon from '@components/icon';
@@ -545,7 +546,7 @@ export default function showNewMediaPopup(
         const [effect, setEffect] = createSignal<DocId>(wasDraft?.effect);
         effectAccessor = effect;
         setEffectAccessor = setEffect;
-        btnConfirm.append(SelectedEffect({effect: effectAccessor}) as HTMLElement);
+        btnConfirm.append(unwrapSolidElement(SelectedEffect({effect: effectAccessor})) as HTMLElement);
       });
 
       const sendMenu = new SendContextMenu({
@@ -1012,6 +1013,11 @@ export default function showNewMediaPopup(
       files.splice(1);
       willAttach.sendFileDetails.splice(1);
       toastNew({langPackKey: 'Ephemeral.SingleAttachment'});
+    }
+
+    // * what the field it came from asks before a reply goes (Stealth Mode over a story)
+    if(!isEditing() && !(await input.isSendingConfirmed())) {
+      return;
     }
 
     const isSlowModeActive = () => input.showSlowModeTooltipIfNeeded({
@@ -1586,6 +1592,8 @@ export default function showNewMediaPopup(
             btnConfirm.disabled = true;
 
             const {openMediaEditorFromMedia} = await import('../mediaEditor');
+            // * the popup can be gone by the time the editor loads (closed, the account switched)
+            if(context.destroyed) return;
 
             isMediaEditorOpen = true;
             const mediaSrc = params.objectURLs.create(file);

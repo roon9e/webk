@@ -31,6 +31,7 @@ import {
   useAiComposerPromptInput,
   useAiComposerPromptMaxLength
 } from './composerParts';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 
 
 export const StyleTab = () => {
@@ -381,6 +382,7 @@ const useShareTone = ({tone}: UseShareToneArgs) => {
   return () => {
     showSharingPickerPopup({
       onSelect: async([peer]) => {
+        const managers = bindManagersToSession(rootScope.managers);
         if(!peer) return;
 
         const preparedPaymentResult = await PaidMessagesInterceptor.prepareStarsForPayment({
@@ -392,7 +394,7 @@ const useShareTone = ({tone}: UseShareToneArgs) => {
 
         const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
         const link = `https://${shortDomain}/addstyle/` + tone.slug;
-        rootScope.managers.appMessagesManager.sendText({
+        managers.appMessagesManager.sendText({
           peerId: peer.peerId,
           threadId: peer.threadId,
           replyToMonoforumPeerId: peer.monoforumThreadId,
@@ -418,9 +420,10 @@ const useDeleteTone = ({
   const {rootScope, toastNew, confirmationPopup} = useHotReloadGuard();
 
   return async() => {
+    const managers = bindManagersToSession(rootScope.managers);
     try {
       if(isSaved) {
-        await rootScope.managers.aiTonesManager.removeSavedTone(tone.id);
+        await managers.aiTonesManager.removeSavedTone(tone.id);
       } else {
         try {
           await confirmationPopup({
@@ -431,7 +434,7 @@ const useDeleteTone = ({
         } catch{
           return;
         }
-        await rootScope.managers.aiTonesManager.deleteTone(tone.id.toString());
+        await managers.aiTonesManager.deleteTone(tone.id.toString());
       }
 
       setTones(prev => prev.filter(t => t._ !== 'aiComposeTone' || t.id !== tone.id))

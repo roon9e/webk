@@ -3,8 +3,6 @@ import CrossfadeBlock from '@components/crossfadeBlock';
 import MediaHeader from '@components/mediaHeader';
 import PopupElementTsx, {createPopup as createPopupTsx} from '@components/popups/indexTsx';
 import RippleElement from '@components/rippleElement';
-import appSidebarLeft from '@components/sidebarLeft';
-import {AppActiveSessionsTab} from '@components/solidJsTabs/tabs';
 import anchorCallback from '@helpers/dom/anchorCallback';
 import classNames from '@helpers/string/classNames';
 import documentFragmentToNodes from '@helpers/dom/documentFragmentToNodes';
@@ -19,6 +17,9 @@ import type {UnconfirmedAuthorization} from '@appManagers/appAccountManager';
 import {createEffect, createMemo, createSignal, onCleanup, Show} from 'solid-js';
 import {render} from 'solid-js/web';
 import styles from '@components/sidebarLeft/newAuthorization.module.scss';
+import collapsedPanelStyles from '@components/sidebarLeft/collapsedPanelButton.module.scss';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 
 export function formatAuthorizationOrigin(authorization: UnconfirmedAuthorization) {
   return [authorization.device, authorization.location].filter(Boolean).join(', ');
@@ -116,7 +117,7 @@ function showAuthorizationPrevented(authorization: UnconfirmedAuthorization) {
 
 async function openActiveSessions() {
   const authorizations = await rootScope.managers.appAccountManager.getAuthorizations();
-  appSidebarLeft.createTab(AppActiveSessionsTab).open({
+  hotReloadGuard.appSidebarLeft.createTab(hotReloadGuard.tabs.AppActiveSessionsTab).open({
     authorizations: authorizations.authorizations
   });
 }
@@ -147,14 +148,15 @@ export function NewAuthorization(props: {
   const [processing, setProcessing] = createSignal(false);
 
   const performAction = async(action: 'confirm' | 'deny') => {
+    const managers = bindManagersToSession(rootScope.managers);
     if(processing()) return false;
 
     const authorization = props.authorization;
     setProcessing(true);
     try {
       const result = action === 'confirm' ?
-        await rootScope.managers.appAccountManager.confirmUnconfirmedAuthorization(authorization.hash) :
-        await rootScope.managers.appAccountManager.resetAuthorization(authorization.hash);
+        await managers.appAccountManager.confirmUnconfirmedAuthorization(authorization.hash) :
+        await managers.appAccountManager.resetAuthorization(authorization.hash);
 
       if(!result) {
         throw new Error('Authorization action failed');
@@ -239,7 +241,7 @@ export function NewAuthorization(props: {
       <RippleElement
         component="button"
         type="button"
-        class={classNames(styles.collapsed, 'hover-effect')}
+        class={classNames(collapsedPanelStyles.button, 'hover-effect')}
         onClick={showActionsPopup}
         aria-label={getAuthorizationAccessibleLabel(props.authorization, props.total)}
       >

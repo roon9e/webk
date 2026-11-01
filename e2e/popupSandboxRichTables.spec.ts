@@ -21,6 +21,10 @@ const UNBREAKABLE = [
 
 const paragraph = (text?: string): JSONContent => ({type: 'paragraph', content: text ? [{type: 'text', text}] : undefined});
 const cell = (text?: string, attrs?: Record<string, unknown>): JSONContent => ({type: 'tableCell', attrs, content: [paragraph(text)]});
+// monospace, which a message draws as <code> (`textFixed`) and the composer as a span
+const codeCell = (text: string): JSONContent => ({type: 'tableCell', content: [
+  {type: 'paragraph', content: [{type: 'text', text, marks: [{type: 'code'}]}]}
+]});
 const header = (text?: string, attrs?: Record<string, unknown>): JSONContent => ({type: 'tableHeader', attrs, content: [paragraph(text)]});
 const table = (rows: JSONContent[][], attrs: Record<string, unknown> = {}): JSONContent => ({type: 'chatTableWrapper', content: [
   {type: 'chatTableTitle'},
@@ -35,7 +39,7 @@ async function open(page: Page) {
   await page.getByRole('button', {name: '◂ Hide', exact: true}).click();
   await page.evaluate(async() => {
     const path = '/e2e/fixtures/richTables.ts';
-    const {mountRichTables} = await import(/* @vite-ignore */ path);
+    const {mountRichTables} = await window.e2eImport(path);
     window.richTables = mountRichTables(420);
   });
   await expect.poll(() => page.evaluate(() => [...document.fonts]
@@ -82,11 +86,11 @@ test('columns share the width equally whatever their text, in the composer and a
   }
 });
 
-test('a long word, number or link breaks inside its cell and moves no column', async({page}) => {
+for(const monospace of [false, true]) test(`a long word, number or link${monospace ? ' in monospace' : ''} breaks inside its cell and moves no column`, async({page}) => {
   for(const text of UNBREAKABLE) {
     await setTable(page, table([
       [header('A'), header('B'), header('C')],
-      [cell(text), cell('x'), cell('y')]
+      [monospace ? codeCell(text) : cell(text), cell('x'), cell('y')]
     ]));
 
     const editor = await widths(page, 'editor', 1);

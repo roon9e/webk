@@ -20,6 +20,7 @@ import {createRoot} from 'solid-js';
 import {AvatarNew} from '@components/avatarNew';
 import {ActiveAccountNumber} from '@lib/accounts/types';
 import {putPreloader} from '@components/putPreloader';
+import createNewBadge from '@components/newBadge';
 
 type ButtonMenuItemInner = Omit<Parameters<typeof ButtonMenuSync>[0], 'listenerSetter'>;
 let nextButtonMenuLabelId = 0;
@@ -200,10 +201,7 @@ export function ButtonMenuItem(options: ButtonMenuItemOptions) {
   el.append(textElement);
 
   if(options.new) {
-    const badge = document.createElement('span');
-    badge.classList.add('btn-menu-item-badge');
-    _i18n(badge, 'New');
-    el.append(badge);
+    el.append(createNewBadge());
   }
 
   const keepOpen = !!checkboxField || !!options.keepOpen;
@@ -283,6 +281,27 @@ export function ButtonMenuItem(options: ButtonMenuItemOptions) {
   return ret.filter(Boolean);
 }
 
+// * what each menu `ButtonMenuSync` made acts on, for the items `appendButtonMenuItems` adds to it later
+const MENU_BUTTONS: WeakMap<HTMLElement, {buttons: ButtonMenuItemOptions[], listenerSetter?: ListenerSetter}> = new WeakMap();
+
+function setButtonMenuListenerSetter(buttons: ButtonMenuItemOptions[], listenerSetter?: ListenerSetter) {
+  if(listenerSetter) {
+    buttons.forEach((b) => {
+      (b.options ??= {}).listenerSetter = listenerSetter;
+    });
+  }
+}
+
+// Without the a11y layer: the ordinary tab model — plain action rows are tab
+// stops activated by Enter/Space, native checkbox/radio controls own their focus.
+function setButtonMenuTabStops(buttons: ButtonMenuItemOptions[]) {
+  if(Modes.a11y) return;
+  buttons.forEach(({element, onClick, checkboxField}) => {
+    if(!onClick || checkboxField || !element?.classList.contains('btn-menu-item')) return;
+    element.tabIndex = 0;
+  });
+}
+
 export function ButtonMenuSync({listenerSetter, buttons, radioGroups}: {
   buttons: ButtonMenuItemOptions[],
   radioGroups?: {
@@ -306,11 +325,8 @@ export function ButtonMenuSync({listenerSetter, buttons, radioGroups}: {
     });
   }
 
-  if(listenerSetter) {
-    buttons.forEach((b) => {
-      (b.options ??= {}).listenerSetter = listenerSetter;
-    });
-  }
+  setButtonMenuListenerSetter(buttons, listenerSetter);
+  MENU_BUTTONS.set(el, {buttons, listenerSetter});
 
   // a separator stands between items: none ahead of the first one a `verify` left, nor past the last
   const elements = flatten(buttons.map(ButtonMenuItem));
@@ -351,12 +367,7 @@ export function ButtonMenuSync({listenerSetter, buttons, radioGroups}: {
     return el;
   }
 
-  // Without the a11y layer: the ordinary tab model — plain action rows are tab
-  // stops activated by Enter/Space, native checkbox/radio controls own their focus.
-  buttons.forEach(({element, onClick, checkboxField}) => {
-    if(!onClick || checkboxField || !element.classList.contains('btn-menu-item')) return;
-    element.tabIndex = 0;
-  });
+  setButtonMenuTabStops(buttons);
 
   add('keydown', (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
@@ -401,6 +412,19 @@ export function ButtonMenuSync({listenerSetter, buttons, radioGroups}: {
   });
 
   return el;
+}
+
+/**
+ * Adds items to the end of a menu `ButtonMenuSync` made, while it is shown — for what only an answer
+ * from the server tells (the links of a bank card). They act as the ones it was made with, from the
+ * keyboard too: the menu's own handler finds them among its items.
+ */
+export function appendButtonMenuItems(menu: HTMLElement, buttons: ButtonMenuItemOptions[]) {
+  const made = MENU_BUTTONS.get(menu);
+  setButtonMenuListenerSetter(buttons, made?.listenerSetter);
+  menu.append(...flatten(buttons.map(ButtonMenuItem)));
+  made?.buttons.push(...buttons);
+  setButtonMenuTabStops(buttons);
 }
 
 export default async function ButtonMenu(options: Parameters<typeof ButtonMenuSync>[0]) {

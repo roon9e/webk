@@ -4,6 +4,14 @@ import {For, JSX} from 'solid-js';
 import '@helpers/peerIdPolyfill';
 import ActiveSessions from '@components/sidebarLeft/tabs/activeSessions';
 import {Authorization, ConnectedBot} from '@layer';
+import * as mocked1 from '@components/solidJsTabs/tabs';
+import {registerHotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
+
+// the code under test reads the top level from the registry, not from the modules mocked above
+registerHotReloadGuard({
+  tabs: {...mocked1} as any
+});
+
 
 type ContextMenu = {buttons: Array<{text: string, onClick: () => void}>};
 
@@ -18,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   setAppSettings: vi.fn(),
   getAuthorizations: vi.fn(),
   setAuthorizationTTL: vi.fn(),
+  getAuthorizationTTL: vi.fn(),
   resetAuthorization: vi.fn(),
   resetAuthorizations: vi.fn(),
   updateConnectedBot: vi.fn(),
@@ -162,6 +171,7 @@ function mount(payload: {
       appAccountManager: {
         getAuthorizations: mocks.getAuthorizations,
         setAuthorizationTTL: mocks.setAuthorizationTTL,
+        getAuthorizationTTL: mocks.getAuthorizationTTL,
         resetAuthorization: mocks.resetAuthorization,
         resetAuthorizations: mocks.resetAuthorizations
       },
@@ -201,6 +211,7 @@ beforeEach(() => {
   mocks.appSettings.customDeviceModel = '';
   mocks.getAuthorizations.mockResolvedValue({authorizations: [], authorization_ttl_days: 180});
   mocks.setAuthorizationTTL.mockResolvedValue(true);
+  mocks.getAuthorizationTTL.mockResolvedValue(180);
 });
 
 afterEach(() => {
@@ -417,7 +428,7 @@ describe('active sessions tab', () => {
     expect(ttlSection.querySelector('.inline-select').getAttribute('data-value')).toBe('30');
   });
 
-  it('rolls the period back when saving it fails', async() => {
+  it('rolls the period back to the one the server holds when saving it fails', async() => {
     mocks.setAuthorizationTTL.mockRejectedValue({});
     const container = mount({
       authorizations: [makeAuthorization({hash: 0, pFlags: {current: true}})],
@@ -425,11 +436,12 @@ describe('active sessions tab', () => {
     });
 
     container.querySelector<HTMLElement>('.inline-select-option').click();
-    await Promise.resolve();
-    await Promise.resolve();
+    expect(container.querySelector('.inline-select').getAttribute('data-value')).toBe('7');
 
+    // * the period is asked of the manager once the refused one is answered, not taken from before it
+    await vi.waitFor(() => expect(mocks.toastNew).toHaveBeenCalledWith({langPackKey: 'Error.AnError'}));
+    expect(mocks.getAuthorizationTTL).toHaveBeenCalledOnce();
     expect(container.querySelector('.inline-select').getAttribute('data-value')).toBe('180');
-    expect(mocks.toastNew).toHaveBeenCalledWith({langPackKey: 'Error.AnError'});
   });
 
   it('hides the auto-terminate section until the period is known', () => {

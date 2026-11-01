@@ -21,7 +21,7 @@ import {formatFullSentTime} from '@helpers/date';
 import throttleWithRaf from '@helpers/schedulers/throttleWithRaf';
 import {NULL_PEER_ID} from '@appManagers/constants';
 import formatBytes from '@helpers/formatBytes';
-import {animateSingle} from '@helpers/animation';
+import createMediaProgressTicker from '@helpers/mediaProgressTicker';
 import clamp from '@helpers/number/clamp';
 import toHHMMSS from '@helpers/string/toHHMMSS';
 import MediaProgressLine from '@components/mediaProgressLine';
@@ -41,12 +41,13 @@ import {createStore, SetStoreFunction} from 'solid-js/store';
 import setCurrentTime from '@helpers/dom/setCurrentTime';
 import makeError from '@helpers/makeError';
 import {Middleware} from '@helpers/middleware';
+import {hotListen} from '@helpers/hotModule';
 
 
 const UNMOUNT_PRELOADER = true;
 const SUBTITLE_SEPARATOR = ' • ';
 
-rootScope.addEventListener('messages_media_read', ({mids, peerId}) => {
+hotListen(import.meta.hot, rootScope, 'messages_media_read', ({mids, peerId}) => {
   mids.forEach((mid) => {
     const attr = `[data-mid="${mid}"][data-peer-id="${peerId}"]`;
     (Array.from(document.querySelectorAll(`.audio.is-unread${attr}, .media-round.is-unread${attr}`)) as HTMLElement[]).forEach((elem) => {
@@ -184,6 +185,8 @@ type AudioRowContext = {
   element: AudioElement,
   listenerSetter: ListenerSetter,
   readyPromise: CancellablePromise<void>,
+  /** Runs `callback` once the track can play; never, for a row destroyed before that. */
+  whenReady: (callback: () => void) => void,
   addAudioListener: HTMLMediaElement['addEventListener'],
   togglePlay: (e?: Event, paused?: boolean) => void
 };
@@ -304,12 +307,14 @@ async function wrapVoiceMessage(ctx: AudioRowContext): Promise<WrappedAudio> {
   const onLoad = () => {
     let audio = ctx.element.audio;
 
+    // * the played part follows the waveform's width - a long message moves it a pixel far less often
+    // * than every frame
+    let ticker: ReturnType<typeof createMediaProgressTicker>;
     const setAnimation = () => {
-      animateSingle(() => {
-        if(!audio) return false;
-        onTimeUpdate();
-        return !audio.paused;
-      }, ctx.element);
+      ticker?.stop();
+      if(!audio) return;
+      ticker = createMediaProgressTicker(audio, svgContainer, onTimeUpdate);
+      ticker.start();
     };
 
     const onTimeUpdate = () => {
@@ -326,8 +331,9 @@ async function wrapVoiceMessage(ctx: AudioRowContext): Promise<WrappedAudio> {
     ctx.addAudioListener('timeupdate', throttledTimeUpdate);
     ctx.addAudioListener('ended', throttledTimeUpdate);
     ctx.addAudioListener('play', setAnimation);
+    ctx.addAudioListener('pause', () => ticker?.stop());
 
-    progress && ctx.readyPromise.then(() => {
+    progress && ctx.whenReady(() => {
       let mousedown = false, mousemove = false;
       progress.addEventListener('mouseleave', (e) => {
         if(mousedown) {
@@ -376,7 +382,7 @@ async function wrapVoiceMessage(ctx: AudioRowContext): Promise<WrappedAudio> {
         }
         setCurrentTime(audio, scrubTime);
       }
-    }, noop);
+    });
 
     !progress && progressLine.setMedia({
       media: audio,
@@ -385,6 +391,7 @@ async function wrapVoiceMessage(ctx: AudioRowContext): Promise<WrappedAudio> {
     });
 
     return () => {
+      ticker?.stop();
       progress?.remove();
       progress = null;
       audio = null;
@@ -420,7 +427,7 @@ async function wrapAudio(ctx: AudioRowContext): Promise<WrappedAudio> {
     descriptionEl.append(SUBTITLE_SEPARATOR, ...joinElementsWith(parts, SUBTITLE_SEPARATOR));
   }
 
-  const middleEllipsisEl = new MiddleEllipsisElement();
+  const middleEllipsisEl = MiddleEllipsisElement.create();
   middleEllipsisEl.dataset.fontWeight = '' + options.fontWeight;
   middleEllipsisEl.dataset.fontSize = '' + options.fontSize;
   middleEllipsisEl.dataset.sizeType = options.sizeType;
@@ -480,7 +487,8 @@ function constructDownloadPreloader(tryAgainOnFail = true) {
   const preloader = new ProgressivePreloader({cancelable: true, tryAgainOnFail});
   preloader.construct();
 
-  if(!tryAgainOnFail) {
+  // * the old spinner's circle a little smaller; the ring of dots keeps its own
+  if(!tryAgainOnFail && preloader.circle) {
     preloader.circle.setAttributeNS(null, 'r', '23');
     preloader.totalLength = 143.58203125;
   }
@@ -662,6 +670,7 @@ export default async function createAudioElement(options: AudioElementOptions): 
     element: undefined,
     listenerSetter,
     readyPromise: undefined,
+    whenReady: (callback) => void ctx.readyPromise.then(callback, noop),
     addAudioListener: ((...args: any[]) => (listenerSetter.add(ctx.element.audio) as any)(...args)) as any,
     togglePlay: (e, paused) => ctx.element.togglePlay(e, paused)
   };
@@ -913,7 +922,7 @@ export default async function createAudioElement(options: AudioElementOptions): 
           };
 
           const playListener: any = ctx.addAudioListener('play', onPlay);
-          ctx.readyPromise.then(() => {
+          ctx.whenReady(() => {
             listenerSetter.remove(playListener);
             pauseListener && listenerSetter.remove(pauseListener);
           });
@@ -953,13 +962,16 @@ export default async function createAudioElement(options: AudioElementOptions): 
 
       setState('downloading', true);
 
-      ctx.readyPromise.then(() => {
+      ctx.whenReady(() => {
+        // * the progress comes round to the end before it goes; the playing does not wait for it
         if(UNMOUNT_PRELOADER) {
-          setState('downloading', false);
-          downloadDiv.classList.add('downloaded');
-          setTimeout(() => {
-            downloadDiv.remove();
-          }, 200);
+          Promise.resolve(preloader?.whenCaughtUp()).then(() => {
+            setState('downloading', false);
+            downloadDiv.classList.add('downloaded');
+            setTimeout(() => {
+              downloadDiv.remove();
+            }, 200);
+          });
         }
 
         // release loaded audio
@@ -986,7 +998,7 @@ export default async function createAudioElement(options: AudioElementOptions): 
     preloader.attachPromise(promise);
     el.dataset.isOutgoing = '1';
     preloader.attach(downloadDiv, false);
-    promise.then(() => {
+    promise.then(() => preloader.whenCaughtUp()).then(() => {
       setState('downloading', false);
       downloadDiv.classList.add('downloaded');
       setTimeout(() => {

@@ -15,10 +15,11 @@ import {
 import {IconTsx} from '@components/iconTsx';
 import {PremiumPromoData} from '@components/premium/types';
 import {AppManagers} from '@lib/managers';
-import appImManager, {ChatSetPeerOptions} from '@lib/appImManager';
+import {ChatSetPeerOptions} from '@lib/appImManager';
 import rootScope from '@lib/rootScope';
 import ListenerSetter from '@helpers/listenerSetter';
 import {applyGiftCode} from '@components/popups/giftLink';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 
 export type ShowPremiumPopupOptions = {
   feature?: PremiumPromoFeatureType,
@@ -107,17 +108,15 @@ const createFeatures = async(
 const BUSINESS_EDITORS: {[type in PremiumPromoFeatureType]?: string} = {
   business_hours: 'AppBusinessHoursTab',
   business_location: 'AppBusinessLocationTab',
+  business_links: 'AppBusinessChatLinksTab',
+  business_intro: 'AppBusinessIntroTab',
   business_bots: 'AppChatAutomationTab',
   folder_tags: 'AppChatFoldersTab'
 };
 
 const openBusinessEditor = async(sectionId: string) => {
-  const [{default: appSidebarLeft}, {openSectionTab}] = await Promise.all([
-    import('@components/sidebarLeft'),
-    import('@lib/settingsSearch/openers')
-  ]);
-
-  openSectionTab(sectionId, appSidebarLeft, undefined);
+  const {openSectionTab} = await import('@lib/settingsSearch/openers');
+  openSectionTab(sectionId, hotReloadGuard.appSidebarLeft, undefined);
 };
 
 /**
@@ -275,12 +274,12 @@ function PremiumContent(props: {
       const {premium_bot_username, premium_invoice_slug} = data.appConfig;
       const selected = option();
       if(selected?.bot_url) {
-        appImManager.openUrl(selected.bot_url);
+        hotReloadGuard.appImManager.openUrl(selected.bot_url);
       } else if(premium_bot_username) {
         // * a period with no link of its own goes through the Premium bot, told where the user came from
-        appImManager.openUsername({userName: premium_bot_username, startParam: props.source});
+        hotReloadGuard.appImManager.openUsername({userName: premium_bot_username, startParam: props.source});
       } else if(premium_invoice_slug) {
-        appImManager.openUrl('https://t.me/$' + premium_invoice_slug);
+        hotReloadGuard.appImManager.openUrl('https://t.me/$' + premium_invoice_slug);
       }
     });
   };

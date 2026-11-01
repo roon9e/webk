@@ -21,7 +21,7 @@ async function open(page: Page, {a11y = false, inChat = false} = {}) {
   await page.getByRole('button', {name: '◂ Hide', exact: true}).click();
   await page.evaluate(async(inChat) => {
     const path = '/e2e/fixtures/richMediaComposer.ts';
-    const {mountRichMediaComposerHarness} = await import(/* @vite-ignore */ path);
+    const {mountRichMediaComposerHarness} = await window.e2eImport(path);
     window.richMediaComposerHarness = mountRichMediaComposerHarness({inChat});
   }, inChat);
 }
@@ -171,7 +171,7 @@ test('a file in the editor is only shown: a click puts the caret in its caption,
   await open(page, {a11y: true});
   await page.evaluate(async() => {
     const path = '/src/lib/appDownloadManager.ts';
-    const {default: appDownloadManager} = await import(/* @vite-ignore */ path);
+    const {default: appDownloadManager} = await window.e2eImport(path);
     const downloads: string[] = (window as any).downloads = [];
     for(const method of ['downloadToDisc', 'downloadMedia', 'downloadMediaURL'] as const) {
       const download = appDownloadManager[method].bind(appDownloadManager);
@@ -219,7 +219,8 @@ test('a file\'s and an audio\'s upload fade out over the very row they drew, and
     !!row.querySelector('.document-ico .preloader-container.is-visible, .audio-download .preloader-container.is-visible')
   )))).toEqual([true, true]);
 
-  // as in the chat: the row stays as it was drawn, and its ring fades out over it
+  // as in the chat: the row stays as it was drawn, and its ring fades out over it once its line has come
+  // round to the end (a second at most)
   for(const [index, file] of [
     [0, PDF],
     [1, {name: 'track.mp3', size: 3456, mimeType: 'audio/mpeg', type: 'audio' as const}]
@@ -236,7 +237,7 @@ test('a file\'s and an audio\'s upload fade out over the very row they drew, and
         fading ||= !!ring?.getAnimations().some((animation) => (
           (animation as CSSTransition).transitionProperty === 'opacity' && animation.playState === 'running'
         ));
-        if(performance.now() - start < 800) requestAnimationFrame(sample);
+        if(performance.now() - start < 1600) requestAnimationFrame(sample);
         else resolve({sameRow: row.isConnected, fading, gone: !ring, animations: document.body.classList.contains('animation-level-2')});
       };
       requestAnimationFrame(sample);
@@ -323,7 +324,7 @@ test('a file of a rich message draws as a document row with its caption', async(
   await open(page);
   await page.evaluate(async(file) => {
     const path = '/e2e/fixtures/richPage.ts';
-    const {mountRichPage} = await import(/* @vite-ignore */ path);
+    const {mountRichPage} = await window.e2eImport(path);
     mountRichPage([
       {_: 'pageBlockParagraph', text: {_: 'textPlain', text: 'Before the file'}},
       {_: 'pageBlockDocument', document_id: '5001', caption: {
@@ -349,7 +350,7 @@ test('an audio of a rich message shows its whole name when the line has room for
   const title = 'Clair de lune.flac';
   await page.evaluate(async(title) => {
     const path = '/e2e/fixtures/richPage.ts';
-    const {mountRichPage} = await import(/* @vite-ignore */ path);
+    const {mountRichPage} = await window.e2eImport(path);
     mountRichPage([
       {_: 'pageBlockAudio', audio_id: '5002', caption: {
         _: 'pageCaption', text: {_: 'textEmpty'}, credit: {_: 'textEmpty'}

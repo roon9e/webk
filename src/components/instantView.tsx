@@ -1857,6 +1857,9 @@ const context = useContext(InstantViewContext);
               photo={location}
               class={styles.Media}
               withoutPreloader
+              // the map's box stands while its picture comes: a block drawn again (a message sent comes
+              // back from the server) does not shrink its bubble for a moment
+              fallback={<div class={styles.Media} />}
             />
             <GeoPin />
           </a>

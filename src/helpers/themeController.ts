@@ -1,9 +1,10 @@
 import type {AppTheme, AppThemeSettings} from '@config/state';
 import type {AccentPreset} from '@config/themePresets';
-import type {BaseTheme, Theme, ThemeSettings} from '@layer';
-import {blendWallpaperForTinted, presetThemeId, presetToThemeSettings} from '@config/themePresets';
+import type {BaseTheme, Theme, ThemeSettings, WallPaper} from '@layer';
+import {blendWallpaperForTinted, getCloudThemeWallpaper, presetThemeId, presetToThemeSettings} from '@config/themePresets';
 import type {AppBackgroundTab} from '@components/sidebarLeft/tabs/background';
 import type {AppChatBackground} from '@components/chat/bubbles/chatBackground';
+import {applyOutgoingMessageGradient, getOutgoingMessageGradient, keepReadableOnOutgoingMessageGradient, MESSAGE_OUT_TINT} from '@helpers/outgoingMessageGradient';
 import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
 import rootScope from '@lib/rootScope';
 import {changeColorAccent, ColorRgb, ensureTextContrast, getAccentColor, getAverageColor, getRgbColorFromTelegramColor, hexToRgb, hslaStringToHex, hslaStringToRgba, hslaToRgba, hsvToRgb, mixColors, relativeLuminance, rgbaToHexa, rgbaToHsla, rgbToHsv} from '@helpers/color';
@@ -52,6 +53,8 @@ const appColorMap: {[name in AppColorName]: AppColor} = {
     darkRgb: true
   },
   'message-out-primary-color': {
+    // * the tint, over a gradient of the bubbles (`--message-out-gradient-light-primary-color`)
+    light: true,
     lightFilled: true,
     rgb: true
   },
@@ -635,13 +638,9 @@ export class ThemeController {
   public applyAccentPreset(preset: AccentPreset) {
     const currentTheme = this.getTheme();
     const baseTheme = this.getBaseThemeForName(currentTheme.name);
-    const settings = presetToThemeSettings(preset, baseTheme);
     // iOS dayColorPresets have `wallpaper: nil` — those presets only swap accent + bubbles
-    // and keep the current wallpaper. Mirror that here: setBackgroundDocument requires a
-    // WallPaper, so fall back to the current AppTheme's wallpaper when the preset omits one.
-    if(!settings.wallpaper) {
-      settings.wallpaper = this.getThemeSettings(currentTheme)?.wallpaper;
-    }
+    // and keep the current wallpaper, which applyNewTheme does for any theme without one.
+    const settings = presetToThemeSettings(preset, baseTheme);
     const synthetic: Theme = {
       _: 'theme',
       id: presetThemeId(preset),
@@ -687,10 +686,12 @@ export class ThemeController {
     // (accent preset). Server cloud themes carry numeric/hash ids.
     const themeId = String(theme.id ?? '');
     const isCurated = themeId === '' || themeId.startsWith('preset:');
-    let effectiveWallpaper = themeSettings.wallpaper;
+    let effectiveWallpaper = getCloudThemeWallpaper(theme, themeSettings);
     if(themeName === 'tinted' && !isCurated && effectiveWallpaper) {
       effectiveWallpaper = blendWallpaperForTinted(effectiveWallpaper, themeSettings.accent_color);
     }
+    // setBackgroundDocument requires a WallPaper; the current one is already of this base
+    effectiveWallpaper ??= this.getThemeWallpaper(currentTheme);
 
     // Preserve every base entry from the cloud theme (mirrors iOS' `[TelegramThemeSettings]`).
     // Only the entry matching the current base gets the (optionally tinted-blended) wallpaper.
@@ -743,6 +744,18 @@ export class ThemeController {
     const baseTheme = this.getBaseThemeForName(themeName);
     return theme.settings.find((s) => s.base_theme._ === baseTheme) ??
       theme.settings.find((s) => s.base_theme._ === ((isNight ?? this.isNightThemeName(themeName)) ? 'baseThemeNight' : 'baseThemeClassic'));
+  }
+
+  // What the chat is drawn on under a theme. Cloud themes often give a base no wallpaper of its own
+  // (mostly baseThemeDay's): those keep the current one, or the factory one where a theme without
+  // one was saved as the current theme.
+  public getThemeWallpaper(theme: Theme | AppTheme): WallPaper {
+    const settings = this.getThemeSettings(theme);
+    // * an AppTheme keeps what was picked; a theme of a chat comes as the server gave it
+    const own = settings && ((theme as AppTheme).name ? settings.wallpaper : getCloudThemeWallpaper(theme as Theme, settings as ThemeSettings));
+    return own ??
+      this.getThemeSettings(this.getTheme())?.wallpaper ??
+      this.getThemeSettings(SETTINGS_INIT.themes.find((t) => t.name === this.getResolvedThemeName())).wallpaper;
   }
 
   // Persist a wallpaper pick (Chat Wallpaper tab grid click / upload) onto the *current*
@@ -878,6 +891,11 @@ export class ThemeController {
       applyAppColor({name: 'secondary-text-color', hex: mainSecondaryTextColor!});
     }
 
+    // * increased contrast keeps the bubbles of the one colour it adjusts for the text
+    const outgoingTextColor = hexToRgb(baseColors['primary-text-color']);
+    const outgoingGradient = this.isHighContrast() ? undefined : getOutgoingMessageGradient(themeSettings.message_colors, !!themeSettings.pFlags?.message_colors_animated, outgoingTextColor);
+    applyOutgoingMessageGradient(element, outgoingGradient);
+
     if(!themeSettings.message_colors?.length) {
       return;
     }
@@ -932,10 +950,14 @@ export class ThemeController {
       lightenAlpha: messageLightenAlpha
     });
 
+    const outgoingAccent = rgbaToHexa(accentColor2 ? hsvToRgb(...accentColor2) : myMessagesAccent);
     applyAppColor({
       name: 'message-out-primary-color',
-      hex: isNight ? '#ffffff' : rgbaToHexa(accentColor2 ? hsvToRgb(...accentColor2) : myMessagesAccent),
-      mixColor: newMessageOutBackgroundColor
+      // * the time, the ticks and the links of a bubble of a gradient are read on all of it
+      hex: isNight ? '#ffffff' : outgoingGradient ? keepReadableOnOutgoingMessageGradient(outgoingAccent, outgoingGradient) : outgoingAccent,
+      mixColor: newMessageOutBackgroundColor,
+      // * a reaction's tint, which the colour is read on over a gradient
+      lightenAlpha: MESSAGE_OUT_TINT
     });
 
     // if(accentColor2) {

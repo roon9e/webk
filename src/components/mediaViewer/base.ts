@@ -2,6 +2,7 @@
 // * https://github.com/Ajaxy/telegram-tt/blob/069f4f5b2f2c7c22529ccced876842e7f9cb81f4/src/components/mediaViewer/MediaViewerSlides.tsx
 
 import type {MyDocument} from '@appManagers/appDocsManager';
+import type {ActiveAccountNumber} from '@lib/accounts/types';
 import type {MyPhoto} from '@appManagers/appPhotosManager';
 import deferredPromise from '@helpers/cancellablePromise';
 import mediaSizes from '@helpers/mediaSizes';
@@ -15,7 +16,7 @@ import animationIntersector from '@components/animationIntersector';
 import appMediaPlaybackController, {AppMediaPlaybackController} from '@components/appMediaPlaybackController';
 import ButtonIcon from '@components/buttonIcon';
 import {ButtonMenuItemOptions, ButtonMenuItemOptionsVerifiable} from '@components/buttonMenu';
-import ButtonMenuToggle from '@components/buttonMenuToggle';
+import ButtonMenuToggle, {createButtonMenuVisibility} from '@components/buttonMenuToggle';
 import ProgressivePreloader from '@components/preloader';
 import SwipeHandler, {ZoomDetails} from '@components/swipeHandler';
 import {formatFullSentTime} from '@helpers/date';
@@ -48,6 +49,7 @@ import setAttachmentSize from '@helpers/setAttachmentSize';
 import wrapEmojiText from '@richTextProcessor/wrapEmojiText';
 import LazyLoadQueueBase from '@components/lazyLoadQueueBase';
 import overlayCounter from '@helpers/overlayCounter';
+import contextMenuController from '@helpers/contextMenuController';
 import appDownloadManager from '@lib/appDownloadManager';
 import noop from '@helpers/noop';
 import wrapPeerTitle from '@components/wrappers/peerTitle';
@@ -79,6 +81,8 @@ import {getMediaSourceClip} from '@components/mediaViewer/clipPath';
 import getEffectiveCornerRadii from '@components/mediaViewer/cornerRadii';
 import snapshotRenderedMedia, {copyRenderedImage, RenderedMedia} from '@components/mediaViewer/snapshotRenderedMedia';
 import getMediaViewerDocumentSize from '@components/mediaViewer/documentSize';
+import getShownVideo from '@components/mediaViewer/shownVideo';
+import createSlideMenu from '@components/mediaViewer/slideMenu';
 import getDocumentURL from '@appManagers/utils/docs/getDocumentURL';
 import choosePhotoSize from '@appManagers/utils/photos/choosePhotoSize';
 import assumeType from '@helpers/assumeType';
@@ -92,6 +96,8 @@ import cloneDOMRect from '@helpers/dom/cloneDOMRect';
 import isVideoStalled from '@helpers/dom/isVideoStalled';
 import {getMoverTransform, MOVER_TRANSFORM_PROPERTY, MOVER_TRANSFORM_SYNCED_CLASS, setMoverTransform} from '@components/mediaViewer/moverTransform';
 import createSourceFloatings from '@components/mediaViewer/sourceFloatings';
+import {bindManagersToSession, getSessionOf} from '@lib/accounts/bindManagersToAccount';
+import {isSessionLeaving} from '@lib/accounts/getCurrentAccount';
 
 const ZOOM_STEP = 0.5;
 const ZOOM_INITIAL_VALUE = 1;
@@ -261,6 +267,10 @@ export default class AppMediaViewerBase<
   protected disposeSolid?: () => void;
 
   protected videoPlayer: VideoPlayer;
+  /** Hides the desktop ⋮ while none of its actions is offered: call once what their `verify` reads has changed */
+  protected updateMoreMenu: () => void = noop;
+  // * the menus' slide: what an action only a menu has acts on is `getMenuTarget()`
+  private slideMenu = createSlideMenu(() => ({id: this.tempId, target: this.target}));
   protected adminPanel: HTMLDivElement;
 
   protected zoomElements: {
@@ -319,7 +329,7 @@ export default class AppMediaViewerBase<
   ) {
     super(false);
 
-    this.managers = rootScope.managers;
+    this.managers = bindManagersToSession(rootScope.managers);
     this.middlewareHelper = getMiddleware();
 
     this.log = logger('AMV');
@@ -988,9 +998,44 @@ export default class AppMediaViewerBase<
     this.videoPlayer.lockControls(this.isZooming || this.isRotated() ? false : undefined);
   }
 
-  protected setBtnMenuToggle(buttons: ButtonMenuItemOptionsVerifiable[]) {
-    const btnMenuToggle = ButtonMenuToggle({buttonOptions: {onlyMobile: true}, direction: 'bottom-left', buttons});
+  /**
+   * Handhelds get every action in the topbar's menu. On a desktop the actions have icons of their own, but for
+   * `menuOnly`, which have none: they go in a ⋮ beside the icons, as in tdesktop's viewer.
+   */
+  protected setBtnMenuToggle(buttons: ButtonMenuItemOptionsVerifiable[], menuOnly: ButtonMenuItemOptionsVerifiable[] = []) {
+    const btnMenuToggle = ButtonMenuToggle({buttonOptions: {onlyMobile: true}, direction: 'bottom-left', buttons, ...this.slideMenu.toggle()});
     this.topbar.append(btnMenuToggle);
+
+    if(menuOnly.length) {
+      const btnMore = ButtonMenuToggle({buttonOptions: {noRipple: true}, direction: 'bottom-left', buttons: menuOnly, ...this.slideMenu.toggle()});
+      btnMore.classList.add('hide');
+      this.buttons.close.before(btnMore);
+      this.updateMoreMenu = createButtonMenuVisibility(btnMore, menuOnly);
+    }
+  }
+
+  /** The slide the shown menu was opened on, while it is still shown: what an action only a menu has acts on */
+  protected getMenuTarget() {
+    return this.slideMenu.target();
+  }
+
+  /** The `<video>` the viewer shows, once it is there: never the previous slide's, while paging */
+  protected getShownVideo() {
+    return getShownVideo(this.content.mover, this.videoPlayer?.video);
+  }
+
+  /** What Escape and Back do to the viewer: a live stream's outlives an account switch. */
+  public getNavigationItem() {
+    return this.navigationItem;
+  }
+
+  /** Closes it from outside (an account switch) even mid-animation, which `close` refuses: once it is over. */
+  public async closeWhenIdle() {
+    while(this.setMoverAnimationPromise && !this.closing) {
+      await this.setMoverAnimationPromise.catch(noop);
+    }
+
+    return this.close();
   }
 
   public close(e?: MouseEvent) {
@@ -1157,7 +1202,9 @@ export default class AppMediaViewerBase<
 
   private onKeyDown = (e: KeyboardEvent) => {
     // this.log('onKeyDown', e);
-    if(overlayCounter.overlaysActive > 1) {
+    // * a popup over the viewer has the keys, and so does a menu with the a11y layer, whose arrows move through
+    // * its items; without the layer a key pages as before, and paging closes the menu (`_openMedia`)
+    if(overlayCounter.overlaysActive > 1 || (Modes.a11y && contextMenuController.isOpened())) {
       return;
     }
 
@@ -2023,7 +2070,8 @@ export default class AppMediaViewerBase<
     } */
   }
 
-  protected setAuthorInfo(fromId: PeerId | string, timestamp: number) {
+  // * `accountNumber`: the account the media is of, when the tab may show another (a live stream's)
+  protected setAuthorInfo(fromId: PeerId | string, timestamp: number, accountNumber?: ActiveAccountNumber) {
     const isPeerId = fromId.isPeerId();
     let wrapTitlePromise: Promise<HTMLElement> | HTMLElement;
     if(isPeerId) {
@@ -2031,7 +2079,8 @@ export default class AppMediaViewerBase<
         peerId: fromId as PeerId,
         dialog: false,
         onlyFirstName: false,
-        plainText: false
+        plainText: false,
+        accountNumber
       });
     } else {
       const title = wrapTitlePromise = document.createElement('span');
@@ -2046,7 +2095,8 @@ export default class AppMediaViewerBase<
       middleware: (this.author.avatarMiddlewareHelper = this.middlewareHelper.get().create()).get(),
       size: 44,
       peerId: fromId as PeerId || NULL_PEER_ID,
-      peerTitle: isPeerId ? undefined : '' + fromId
+      peerTitle: isPeerId ? undefined : '' + fromId,
+      accountNumber
     });
 
     newAvatar.node.classList.add(MEDIA_VIEWER_CLASSNAME + '-userpic');
@@ -2203,9 +2253,10 @@ export default class AppMediaViewerBase<
   }
 
   protected async loadQualityLevelsDownloadOptions(doc: MyDocument, tempId = this.tempId) {
+    const managers = bindManagersToSession(this.managers);
     this.removeQualityOptions();
 
-    const altDocs = await this.managers.appDocsManager.getAltDocsByDocument(doc.id);
+    const altDocs = await managers.appDocsManager.getAltDocsByDocument(doc.id);
     if(!altDocs) return;
 
     const filteredEntries = getQualityLevels(altDocs);
@@ -2213,7 +2264,7 @@ export default class AppMediaViewerBase<
     if(!playsOverHls(filteredEntries)) return;
 
     const options: ButtonMenuItemOptionsVerifiable[] = await Promise.all(filteredEntries.map(async(entry) => {
-      const doc = await this.managers.appDocsManager.getDoc(entry.id);
+      const doc = await managers.appDocsManager.getDoc(entry.id);
       const snappedHeight = snapQualityHeight(entry.h);
 
       return ({
@@ -2227,6 +2278,21 @@ export default class AppMediaViewerBase<
     if(this.tempId === tempId) {
       this.downloadQualityMenuOptions.push(...options);
     }
+  }
+
+  /**
+   * Asked to open (or to page on) by an account session that is over, or on its way out: it would stand over
+   * the next account, after the switch has closed what was open. A live stream's viewer holds the stream's own
+   * managers, not a session's, and goes on.
+   */
+  protected isAskedTooLate() {
+    const session = getSessionOf(this.managers);
+    if(!session || !isSessionLeaving(session)) {
+      return false;
+    }
+
+    console.debug('[media viewer] not opened: its account session is over');
+    return true;
   }
 
   protected async _openMedia({
@@ -2245,7 +2311,8 @@ export default class AppMediaViewerBase<
     onCanPlay,
     onMoverSet,
     onBuffering,
-    noAuthor
+    noAuthor,
+    liveStreamAccount
   }: {
     media: MyDocument | MyPhoto | InputGroupCall.inputGroupCall,
     mediaThumbnail?: string,
@@ -2262,7 +2329,9 @@ export default class AppMediaViewerBase<
     onCanPlay?: () => void,
     onMoverSet?: () => void,
     onBuffering?: () => void,
-    noAuthor?: boolean
+    noAuthor?: boolean,
+    // * the account a live stream is watched on: the tab may show another one by now
+    liveStreamAccount?: ActiveAccountNumber
     /* , needLoadMore = true */
   }) {
     if(this.setMoverPromise) return this.setMoverPromise;
@@ -2275,7 +2344,7 @@ export default class AppMediaViewerBase<
     this.log('openMedia', media, fromId, prevTargets, nextTargets, isLiveStream, isDocument, isVideo);
 
     this.live = isLiveStream;
-    const setAuthorPromise = noAuthor ? Promise.resolve() : this.setAuthorInfo(fromId, timestamp);
+    const setAuthorPromise = noAuthor ? Promise.resolve() : this.setAuthorInfo(fromId, timestamp, liveStreamAccount);
     void setAuthorPromise.catch(() => {});
 
     if(this.isFirstOpen) {
@@ -2307,6 +2376,8 @@ export default class AppMediaViewerBase<
 
     this.target = {element: target} as any;
     const tempId = ++this.tempId;
+    // * a menu is the slide's that goes (a swipe pages under it), and one still opening is dropped (`slideMenu`)
+    if(contextMenuController.isOpened()) contextMenuController.close();
 
     if(container.firstElementChild) {
       container.replaceChildren();
@@ -2478,7 +2549,8 @@ export default class AppMediaViewerBase<
         const avatar = avatarNew({
           middleware: this.middlewareHelper.get(),
           peerId: fromId.toPeerId(),
-          size: 'full'
+          size: 'full',
+          accountNumber: liveStreamAccount
         });
         avatar.node.classList.add('thumbnail-avatar');
         container.append(avatar.node);
@@ -2495,7 +2567,7 @@ export default class AppMediaViewerBase<
     const preloader = isLiveStream ? undefined : supportsStreaming ? this.preloaderStreamable : this.preloader;
 
     const getCacheContext = (type = size?.type) => {
-      if(isLiveStream) return {url: getRtmpStreamUrl(media)};
+      if(isLiveStream) return {url: getRtmpStreamUrl(media, liveStreamAccount)};
       if(isHlsStream && apiManagerProxy.isServiceWorkerOnline()) return {url: getDocumentURL(media as MyDocument, {supportsHlsStreaming: true})};
       return this.managers.thumbsStorage.getCacheContext(media, type);
     };
@@ -2558,6 +2630,8 @@ export default class AppMediaViewerBase<
 
         // * don't remove
         div.append(video);
+        // * the more menu's actions on the shown video (Share at) wait for it
+        this.updateMoreMenu();
 
         const canPlayThrough = new Promise((resolve) => {
           video.addEventListener('canplay', resolve, {once: true});

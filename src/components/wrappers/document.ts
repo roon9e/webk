@@ -12,8 +12,7 @@ import noop from '@helpers/noop';
 import {Message, MessageMedia, WebPage} from '@layer';
 import {MyDocument} from '@appManagers/appDocsManager';
 import appDownloadManager, {Progress} from '@lib/appDownloadManager';
-import appImManager from '@lib/appImManager';
-import {AppManagers} from '@lib/managers';
+import {ReadingManagers} from '@lib/managers';
 import getDownloadMediaDetails from '@appManagers/utils/download/getDownloadMediaDetails';
 import choosePhotoSize from '@appManagers/utils/photos/choosePhotoSize';
 import I18n, {joinElementsWith} from '@lib/langPack';
@@ -36,11 +35,12 @@ import wrapSenderToPeer from '@components/wrappers/senderToPeer';
 import wrapSentTime from '@components/wrappers/sentTime';
 import {Middleware} from '@helpers/middleware';
 import readBlobAsText from '@helpers/blob/readBlobAsText';
-import SolidJSHotReloadGuardProvider from '@lib/solidjs/hotReloadGuardProvider';
+import SolidJSHotReloadGuardProvider, {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 import {openMarkdownInstantView} from '@components/markdownInstantView';
 import isPlayableDocument from '@appManagers/utils/docs/isPlayableDocument';
+import {hotListen} from '@helpers/hotModule';
 
-rootScope.addEventListener('document_downloading', (docId) => {
+hotListen(import.meta.hot, rootScope, 'document_downloading', (docId) => {
   const elements = Array.from(document.querySelectorAll(`.document[data-doc-id="${docId}"]`)) as HTMLElement[];
   elements.forEach((element) => {
     if(element.querySelector('.preloader-container.manual')) {
@@ -87,7 +87,7 @@ export default async function wrapDocument({
   autoDownloadSize?: number,
   lazyLoadQueue?: LazyLoadQueue,
   sizeType?: MediaSizeType,
-  managers?: AppManagers,
+  managers?: ReadingManagers,
   cacheContext?: ThumbCache,
   fontSize?: number,
   getSize?: () => number,
@@ -256,7 +256,7 @@ export default async function wrapDocument({
   `;
 
   const nameDiv = docDiv.querySelector('.document-name') as HTMLElement;
-  const middleEllipsisEl = new MiddleEllipsisElement();
+  const middleEllipsisEl = MiddleEllipsisElement.create();
   middleEllipsisEl.dataset.fontWeight = '' + fontWeight;
   middleEllipsisEl.dataset.fontSize = '' + fontSize;
   middleEllipsisEl.dataset.sizeType = sizeType;
@@ -327,8 +327,9 @@ export default async function wrapDocument({
     const _bytesContainer = formatBytes(doc.size);
     sizeContainer.style.position = 'absolute';
     sizeContainer.style.insetInlineStart = '0';
-    // a transfer that failed or was cancelled leaves the row as it was, as a failed download does
-    promise.then(onLoad, () => docDiv.classList.remove('downloading')).finally(() => {
+    // a transfer that failed or was cancelled leaves the row as it was, as a failed download does; one
+    // that is done shows the file once its progress has come round to the end
+    promise.then(() => preloader?.whenCaughtUp()).then(onLoad, () => docDiv.classList.remove('downloading')).finally(() => {
       // sizeContainer.replaceWith(bytesContainer);
       bytesContainer.style.visibility = '';
       sizeContainer.remove();
@@ -356,7 +357,7 @@ export default async function wrapDocument({
     const doc = (docDiv as any).doc;
     // const doc = await managers.appDocsManager.getDoc(docDiv.dataset.docId);
     let download: CancellablePromise<any>;
-    const queueId = appImManager.chat?.bubbles?.lazyLoadQueue.queueId;
+    const queueId = hotReloadGuard.appImManager.chat?.bubbles?.lazyLoadQueue.queueId;
     if(!save) {
       download = appDownloadManager.downloadToDisc({media: doc, queueId}, true);
     } else if(ext === 'md' || ext === 'markdown' || /^text\/(x-)?markdown\b/i.test(doc.mime_type || '')) {

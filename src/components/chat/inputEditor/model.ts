@@ -303,7 +303,8 @@ function parsePreformattedLine(
     }
 
     const end = entityEnd(pre);
-    while(index + 1 < lines.length && lines[index + 1].start <= end) ++index;
+    // a code block's own last line break ends its line: the line after it, an empty one too, is not its
+    while(index + 1 < lines.length && lines[index + 1].start < end) ++index;
     const endLine = lines[index];
     content.push({
       type: 'codeBlock',
@@ -584,7 +585,8 @@ export type SerializedChatInputDocument = {
   entities: MessageEntity[],
   positionAtTextOffset: (offset: number, affinity?: 'backward' | 'forward') => number,
   text: string,
-  textOffsetAtPosition: (position: number, affinity?: 'backward' | 'forward') => number
+  textOffsetAtPosition: (position: number, affinity?: 'backward' | 'forward') => number,
+  textEndBefore: (position: number) => number
 };
 
 export function tiptapToTelegram(
@@ -872,5 +874,12 @@ export function tiptapToTelegram(
     return nearest?.text ?? 0;
   };
 
-  return {text, entities, positionAtTextOffset, textOffsetAtPosition};
+  // where the text of what comes before a position between two blocks ends: after the block before
+  // it, not after the line break that follows that block
+  const textEndBefore = (position: number) => segments.reduce(
+    (end, segment) => segment.pmEnd <= position ? Math.max(end, segment.textEnd) : end,
+    0
+  );
+
+  return {text, entities, positionAtTextOffset, textOffsetAtPosition, textEndBefore};
 }

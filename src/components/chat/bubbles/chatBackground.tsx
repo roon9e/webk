@@ -30,7 +30,7 @@ import windowSize from '@helpers/windowSize';
 import {logger, LogTypes} from '@lib/logger';
 import {MOUNT_CLASS_TO} from '@config/debug';
 import {DEFAULT_BACKGROUND_SLUG} from '@config/app';
-import {AppManagers} from '@lib/managers';
+import {ReadingManagers} from '@lib/managers';
 import {AppTheme} from '@config/state';
 import {appState} from '@stores/appState';
 import classNames from '@helpers/string/classNames';
@@ -70,7 +70,7 @@ export type ChatBackgroundProps = {
   /** Override the global theme controller — used by the passcode lock screen for HMR safety. */
   themeController?: ThemeController;
   /** Override the global managers — same reason as `themeController`. */
-  managers?: AppManagers;
+  managers?: ReadingManagers;
   /**
    * Pattern-canvas size (CSS pixels). Defaults to the window size — correct for full-screen chat
    * backgrounds, but wasteful for thumbnails. Picker / theme-tile previews should pass the actual
@@ -140,7 +140,7 @@ const log = logger('CHAT-BG', LogTypes.Log | LogTypes.Warn | LogTypes.Error);
 
 async function resolveFromPeer(
   peerId: PeerId,
-  managers: AppManagers
+  managers: ReadingManagers
 ): Promise<{theme?: ChatBackgroundTheme, wallPaper?: WallPaper}> {
   if(!peerId.isUser()) return {};
   const full = await managers.appProfileManager.getCachedFullUser(peerId.toUserId());
@@ -170,14 +170,14 @@ function resolveBackgroundSync(
   return untrack(() => {
     const globalTheme = themeController.getTheme();
     const theme = options.theme ?? globalTheme;
-    const wallPaper = options.wallPaper ?? themeController.getThemeSettings(theme).wallpaper;
+    const wallPaper = options.wallPaper ?? themeController.getThemeWallpaper(theme);
     return {theme, wallPaper};
   });
 }
 
 function getWallPaperUrl(
   wallPaper: WallPaper,
-  managers: AppManagers | undefined
+  managers: ReadingManagers | undefined
 ): {urlOrPromise: string | Promise<string> | undefined, isColorOnly: boolean} {
   const colors = getColorsFromWallPaper(wallPaper);
   const slug = (wallPaper as WallPaper.wallPaper)?.slug;
@@ -385,7 +385,7 @@ export const ChatBackground: Component<ChatBackgroundProps> = (props) => {
   let tempId = 0;
 
   const themeController = (): ThemeController => props.themeController ?? themeControllerSingleton;
-  const managers = (): AppManagers | undefined => props.managers ?? rootScope.managers;
+  const managers = (): ReadingManagers | undefined => props.managers ?? rootScope.managers;
 
   /** Promotes `stagingSlot` to visible and demotes `visibleSlot`, then swaps the references. */
   const presentStagingSlot = (transition: ChatBackgroundTransition) => {

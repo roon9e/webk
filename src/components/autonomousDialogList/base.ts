@@ -7,9 +7,9 @@ import attachPinnedDialogsReorder from '@components/dialogsPinnedReorder';
 import throttle from '@helpers/schedulers/throttle';
 import {SequentialCursorFetcher, SequentialCursorFetcherResult} from '@helpers/sequentialCursorFetcher';
 import windowSize from '@helpers/windowSize';
-import type {AppDialogsManager, DialogDom} from '@lib/appDialogsManager';
-import appImManager from '@lib/appImManager';
-import {AppManagers} from '@lib/managers';
+import type {AppDialogsManager} from '@lib/appDialogsManager';
+import type {DialogDom} from '@components/dialogElement';
+import {ReadingManagers} from '@lib/managers';
 import getDialogIndex from '@appManagers/utils/dialogs/getDialogIndex';
 import getDialogIndexKey from '@appManagers/utils/dialogs/getDialogIndexKey';
 import {isForumTopic} from '@appManagers/utils/dialogs/isDialog';
@@ -20,6 +20,7 @@ import {MonoforumDialog} from '@lib/storages/monoforumDialogs';
 import Scrollable from '@components/scrollable';
 import SortedDialogList from '@components/sortedDialogList';
 import {AutonomousDialogList} from '@components/autonomousDialogList/dialogs';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 
 
 export const DIALOG_LOAD_COUNT = 20;
@@ -43,7 +44,7 @@ export async function setDialogTyping({dom, peerId, threadId, animate}: {
   // * not the one still fading out after the last activity (`crossfadeContent`)
   const getTypingElement = () => dom.lastMessageSpan.querySelector(':scope > .peer-typing-container') as HTMLElement;
   const oldTypingElement = getTypingElement();
-  const newTypingElement = await appImManager.getPeerTyping(peerId, oldTypingElement, threadId);
+  const newTypingElement = await hotReloadGuard.appImManager.getPeerTyping(peerId, oldTypingElement, threadId);
   if(newTypingElement) {
     if(!oldTypingElement) {
       // * a call as quick as this one may have put its own in meanwhile: this one is an update of it
@@ -86,7 +87,7 @@ export class AutonomousDialogListBase<T extends PossibleDialog = PossibleDialog>
   // protected offsets: {top: number, bottom: number};
   protected indexKey: ReturnType<typeof getDialogIndexKey>;
   protected sliceTimeout: number;
-  protected managers: AppManagers;
+  protected managers: ReadingManagers;
   protected appDialogsManager: AppDialogsManager;
   protected listenerSetter: ListenerSetter;
   protected middlewareHelper: MiddlewareHelper;
@@ -416,10 +417,15 @@ export class AutonomousDialogListBase<T extends PossibleDialog = PossibleDialog>
     this.loadDialogsPromise = undefined;
   }
 
+  /**
+   * Builds the list again, and returns the loading of its first page - asked for at once, so the
+   * one going on when this returns
+   */
   public fullReset() {
     this.reset();
     this.clear();
-    return this.onChatsScroll();
+    this.onChatsScroll();
+    return this.loadDialogsDeferred;
   }
 
   /**

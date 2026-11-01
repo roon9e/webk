@@ -7,20 +7,22 @@ import PasskeyLoginButton from '@components/passkeyLoginButton';
 import MediaHeader from '@components/mediaHeader';
 import TelInputField from '@components/telInputField';
 import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
-import App from '@config/app';
 import cancelEvent from '@helpers/dom/cancelEvent';
 import focusWhenSettled from '@helpers/dom/focusWhenSettled';
 import placeCaretAtEnd from '@helpers/dom/placeCaretAtEnd';
 import replaceContent from '@helpers/dom/replaceContent';
+import formatDuration from '@helpers/formatDuration';
 import {HelpCountry, HelpCountryCode} from '@layer';
+import {getFloodWaitTime} from '@appManagers/utils/getFloodWaitTime';
 import I18n, {i18n} from '@lib/langPack';
 import lottieLoader from '@lib/lottie/lottieLoader';
 import AccountController from '@lib/accounts/accountController';
-import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
 import commonStateStorage from '@lib/commonStateStorage';
+import {wrapFormattedDuration} from '@components/wrappers/wrapDuration';
 import {TrueDcId} from '@types';
 
 import AuthCard from '@/pages/AuthCard';
+import AuthCardError from '@/pages/AuthCardError';
 import {CardSpec, useAuthFlow} from '@/pages/authFlow';
 import {continueLogin} from '@/pages/continueLogin';
 import styles from '@/pages/authFlow.module.scss';
@@ -38,7 +40,7 @@ type Spec = Extract<CardSpec, {name: 'signIn'}>;
  * cancelled on unmount via a local `cancelled` flag.
  */
 export default function SignInCard(_props: {spec: Spec}) {
-  const {managers, navigate, toIm} = useAuthFlow();
+  const {accountNumber, managers, navigate, toIm} = useAuthFlow();
 
   let cancelled = false;
 
@@ -47,6 +49,8 @@ export default function SignInCard(_props: {spec: Spec}) {
   const [submitting, setSubmitting] = createSignal(false);
   const [hasValidInput, setHasValidInput] = createSignal(false);
   const [nextContent, setNextContent] = createSignal<JSX.Element>(i18n('Login.Next'));
+  // a whole sentence with a duration: too long for the field's floating label, so it gets a line under it
+  const [floodError, setFloodError] = createSignal<JSX.Element>();
 
   /* ---------- inputs ---------- */
 
@@ -92,6 +96,7 @@ export default function SignInCard(_props: {spec: Spec}) {
       }
 
       setHasValidInput(!!(country || (telInputField.value.length - 1) > 1));
+      setFloodError();
     }
   });
 
@@ -110,6 +115,7 @@ export default function SignInCard(_props: {spec: Spec}) {
     if(e) cancelEvent(e);
 
     setSubmitting(true);
+    setFloodError();
     setNextContent(
       <>
         {i18n('PleaseWait')}
@@ -123,18 +129,10 @@ export default function SignInCard(_props: {spec: Spec}) {
     // * the code card's sticker is fetched alongside the code itself, not when that card mounts: by
     // * then the card is already open, and the monkey turns up in it a moment later
     preloadTrackingMonkey().catch(() => {});
-    managers.apiManager.invokeApi('auth.sendCode', {
-      phone_number,
-      api_id: App.id,
-      api_hash: App.hash,
-      settings: {
-        _: 'codeSettings',
-        pFlags: {}
-      }
-    }).then((code) => {
+    managers.appAccountManager.sendCode(phone_number).then((code) => {
       // the very first send has no previous `phone_code_hash` to sign up with
       return continueLogin(code, {managers, navigate, toIm, phone_number});
-    }).catch((err) => {
+    }).catch((err: ApiError) => {
       setSubmitting(false);
 
       switch(err.type) {
@@ -144,10 +142,18 @@ export default function SignInCard(_props: {spec: Spec}) {
           telEl.classList.add('error');
           setNextContent(i18n('Login.Next'));
           break;
-        default:
+        default: {
           console.error('auth.sendCode error:', err);
-          setNextContent(err.type);
+          const floodWait = getFloodWaitTime(err);
+          if(floodWait.hasWaitTime) {
+            telInputField.setError();
+            setFloodError(i18n('Login.Code.TooManyAttempts', [wrapFormattedDuration(formatDuration(floodWait.waitTime))]));
+            setNextContent(i18n('Login.Next'));
+          } else {
+            setNextContent(err.type);
+          }
           break;
+        }
       }
     });
   }
@@ -155,7 +161,7 @@ export default function SignInCard(_props: {spec: Spec}) {
   /* ---------- DC pre-warm cascade ---------- */
 
   function tryAgain() {
-    managers.apiManager.invokeApi('help.getNearestDc').then((nearestDcResult) => {
+    managers.apiManager.getNearestDc().then((nearestDcResult) => {
       if(cancelled) return nearestDcResult;
 
       const langPack = commonStateStorage.getFromCache('langPack');
@@ -186,7 +192,7 @@ export default function SignInCard(_props: {spec: Spec}) {
           const dcId = _dcs.shift();
           if(!dcId) return;
 
-          const accountData = await AccountController.get(getCurrentAccount());
+          const accountData = await AccountController.get(accountNumber);
           const key = accountData[`dc${dcId as TrueDcId}_auth_key`];
 
           if(key) return g();
@@ -251,7 +257,11 @@ export default function SignInCard(_props: {spec: Spec}) {
     >
       <div class="input-wrapper">
         {countryInputField.container}
-        {telInputField.container}
+        {/* one grid cell with its error line, so that the line takes no gap of the wrapper while empty */}
+        <div class={styles.fieldWithError}>
+          {telInputField.container}
+          <AuthCardError content={floodError()} describes={telEl} />
+        </div>
         <Button
           class="btn-primary btn-color-primary"
           disabled={!hasValidInput() || submitting()}
@@ -259,7 +269,7 @@ export default function SignInCard(_props: {spec: Spec}) {
         >
           {nextContent()}
         </Button>
-        {getCurrentAccount() === 1 && <LanguageChangeButton />}
+        {accountNumber === 1 && <LanguageChangeButton />}
       </div>
       <Button
         class="btn-primary btn-secondary btn-primary-transparent primary"

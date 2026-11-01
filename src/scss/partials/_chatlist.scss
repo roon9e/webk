@@ -426,6 +426,10 @@ ul.chatlist {
           border-color: var(--primary-color);
         }
 
+        .dialog-group-call-icon-bar {
+          background-color: var(--primary-color);
+        }
+
         .badge.unread,
         .mention,
         .dialog-subtitle-badge-reaction,
@@ -586,6 +590,8 @@ ul.chatlist {
     margin: 0 .5rem .5rem;
     // border: 1px solid var(--border-color);
     background-color: var(--light-filled-secondary-text-color);
+    // a plate with margins on every width: .row-clickable rounds only above handhelds
+    border-radius: $border-radius-medium;
 
     &-container {
       height: 0;
@@ -849,6 +855,30 @@ ul.chatlist {
     width: 20px;
     height: 20px;
     z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2.5px;
+
+    // * three bars, the outer ones high while the middle one is low and back (groupCallActiveIcon.ts)
+    &-bar {
+      width: 2px;
+      height: 12px;
+      border-radius: 1px;
+      background-color: #fff;
+
+      &:nth-child(2) {
+        transform: scaleY(.3333);
+      }
+
+      @include animation-level(2) {
+        animation: group-call-bar 1s infinite;
+
+        &:nth-child(2) {
+          animation-delay: -.5s;
+        }
+      }
+    }
   }
 
   &-subtitle-badge,
@@ -876,5 +906,22 @@ ul.chatlist {
     color: var(--chatlist-pinned-color);
     font-size: 1.125rem;
     margin-inline-start: .125rem;
+  }
+}
+
+// * |cos| of the time, as the canvas drew it: easing in to the low point, easing out of it
+@keyframes group-call-bar {
+  0% {
+    transform: scaleY(1);
+    animation-timing-function: cubic-bezier(.12, 0, .39, 0);
+  }
+
+  50% {
+    transform: scaleY(.3333);
+    animation-timing-function: cubic-bezier(.61, 1, .88, 1);
+  }
+
+  100% {
+    transform: scaleY(1);
   }
 }

@@ -9,7 +9,7 @@ import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
 import appManagersManager from '@appManagers/appManagersManager';
 import listenMessagePort from '@helpers/listenMessagePort';
 import {logger} from '@lib/logger';
-import {getLogEntries, setLogBufferEnabled} from '@lib/debug/logsBuffer';
+import {clearLogBuffer, getLogEntries, setLogBufferEnabled} from '@lib/debug/logsBuffer';
 import {readThreadMemory} from '@lib/debug/memoryStats';
 import {getMemoryWriterStats} from '@lib/files/memoryWriter';
 import toggleStorages from '@helpers/toggleStorages';
@@ -75,6 +75,8 @@ port.addMultipleEventsListeners({
   },
 
   getLogs: () => getLogEntries(),
+
+  clearLogs: () => clearLogBuffer(),
 
   getMemoryStats: async() => {
     const urls = objectUrlRegistry.getStats();
@@ -199,6 +201,13 @@ port.addMultipleEventsListeners({
 
   toggleStorages: ({enabled, clearWrite}) => {
     return toggleStorages(enabled, clearWrite);
+  },
+
+  // * the snapshots travel the same port ahead of the reply, so they are in place when it resolves
+  mirrorAll: ({accountNumber}, source) => {
+    return callbackify(appManagersManager.getManagersByAccount(), (managers) => {
+      mirrorAccountTo(managers[accountNumber], source);
+    });
   },
 
   event: (payload, source) => {
@@ -416,14 +425,21 @@ const onTabConnect = (source: MessageEventSource) => {
   } else {
     callbackify(appManagersManager.getManagersByAccount(), (managers) => {
       for(const key in managers) {
-        const accountNumber = key as any as ActiveAccountNumber
-        managers[accountNumber].thumbsStorage.mirrorAll(source);
-        managers[accountNumber].appPeersManager.mirrorAllPeers(source);
-        managers[accountNumber].appMessagesManager.mirrorAllMessages(source);
+        mirrorAccountTo(managers[key as any as ActiveAccountNumber], source);
       }
     });
   }
 };
+
+// * snapshots of one account's mirrors for one tab: on connect, and when the tab switches to that account
+function mirrorAccountTo(
+  managers: Awaited<ReturnType<typeof appManagersManager.getManagersByAccount>>[ActiveAccountNumber],
+  source: MessageEventSource
+) {
+  managers.thumbsStorage.mirrorAll(source);
+  managers.appPeersManager.mirrorAllPeers(source);
+  managers.appMessagesManager.mirrorAllMessages(source);
+}
 
 const onTabDisconnect = (source: MessageEventSource) => {
   objectUrlRegistry.releaseSource(source);

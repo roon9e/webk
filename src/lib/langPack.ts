@@ -1,5 +1,6 @@
 import type lang from '@/lang';
 import type langSign from '@/langSign';
+import langPackLocalVersion from '@/langPackLocalVersion';
 import type {State} from '@config/state';
 import {IS_BETA, MOUNT_CLASS_TO} from '@config/debug';
 import Modes from '@config/modes';
@@ -112,6 +113,15 @@ namespace I18n {
 
   export const [langCodeNormalized, setLangCodeNormalized] = createSignal<TranslatableLanguageISO>();
 
+  // the bundled strings and their version: in dev a hot update swaps in the edited ones (see the end of the module)
+  let localVersion = langPackLocalVersion;
+  const localStrings: {lang?: typeof import('@/lang'), langSign?: typeof import('@/langSign')} = {};
+  export function getLocalVersion() { return localVersion; }
+
+  function importLocalStrings() {
+    return Promise.all([localStrings.lang ?? import('../lang'), localStrings.langSign ?? import('../langSign')]);
+  }
+
   let forcedRTL: boolean = Modes.rtl || undefined;
   // * the direction of the language applied last, which a forced one stands over
   let languageRTL: boolean;
@@ -198,10 +208,9 @@ namespace I18n {
   export function loadLocalLangPack() {
     const defaultCode = App.langPackCode;
     return Promise.all([
-      import('../lang'),
-      import('../langSign'),
+      importLocalStrings(),
       import('../countries')
-    ]).then(([lang, langSign, countries]) => {
+    ]).then(([[lang, langSign], countries]) => {
       const strings: LangPackString[] = [];
       formatLocalStrings(lang.default, strings);
       formatLocalStrings(langSign.default, strings);
@@ -213,7 +222,7 @@ namespace I18n {
         strings,
         version: App.langPackVersion,
         countries: countries.default,
-        localVersion: App.langPackLocalVersion
+        localVersion
       };
       return langPack;
     });
@@ -221,16 +230,14 @@ namespace I18n {
 
   export function loadLangPack(langCode: string, web?: boolean, ignoreCache?: boolean) {
     web = true;
-    const managers = rootScope.managers;
     return Promise.all([
-      managers.appLangPackManager.getLangPack(langCode, web ? 'web' : App.langPack, ignoreCache),
-      !web && managers.appLangPackManager.getLangPack(langCode, 'android', ignoreCache),
-      import('../lang'),
-      import('../langSign'),
-      managers.appLangPackManager.getCountriesList(langCode, ignoreCache),
+      rootScope.managers.appLangPackManager.getLangPack(langCode, web ? 'web' : App.langPack, ignoreCache),
+      !web && rootScope.managers.appLangPackManager.getLangPack(langCode, 'android', ignoreCache),
+      importLocalStrings(),
+      rootScope.managers.appLangPackManager.getCountriesList(langCode, ignoreCache),
       polyfillPromise,
       // * no word from the server (a code it does not know) leaves the direction to the code
-      managers.appLangPackManager.getLanguage(langCode, web ? 'web' : App.langPack).catch((): undefined => undefined)
+      rootScope.managers.appLangPackManager.getLanguage(langCode, web ? 'web' : App.langPack).catch((): undefined => undefined)
     ]);
   }
 
@@ -270,7 +277,7 @@ namespace I18n {
       }
 
       throw err;
-    }).then(([langPack1, langPack2, localLangPack1, localLangPack2, countries, _, language]) => {
+    }).then(([langPack1, langPack2, [localLangPack1, localLangPack2], countries, _, language]) => {
       let strings: LangPackString[] = [];
 
       const pushLocal = () => [localLangPack1, localLangPack2].forEach((l) => {
@@ -286,7 +293,7 @@ namespace I18n {
 
       langPack1.strings = strings;
       langPack1.countries = countries;
-      langPack1.localVersion = App.langPackLocalVersion;
+      langPack1.localVersion = localVersion;
       if(language) langPack1.rtl = !!language.pFlags.rtl;
       return saveLangPack(langPack1, true);
     });
@@ -376,6 +383,10 @@ namespace I18n {
       rootScope.dispatchEvent('language_change', currentLangCode);
     }
 
+    updateElements();
+  }
+
+  function updateElements() {
     const elements = Array.from(document.querySelectorAll(`.i18n`)) as HTMLElement[];
     elements.forEach((element) => {
       const instance = weakMap.get(element);
@@ -386,6 +397,48 @@ namespace I18n {
     });
 
     rootScope.dispatchEventSingle('language_apply');
+  }
+
+  /**
+   * dev: the edited lang.ts / langSign.ts (or the version the dev server bumps) taken in place. The bundled strings
+   * win over the server's there anyway (TEST_LOCAL), so this gives what applying the whole pack again would.
+   */
+  // one at a time: Vite calls the accept callback once for each of the modules a batch updated, and an application that
+  // read the strings before another finished would write the older ones back over it
+  let localUpdates: Promise<void> = Promise.resolve();
+  export function applyLocalUpdate(update: Partial<typeof localStrings> & {version?: number}) {
+    return localUpdates = localUpdates.then(() => applyLocalUpdateNow(update)).catch((err) => {
+      console.error('local strings update failed', err);
+    });
+  }
+
+  async function applyLocalUpdateNow(update: Partial<typeof localStrings> & {version?: number}) {
+    localVersion = update.version ?? localVersion;
+    if(!update.lang && !update.langSign) {
+      return;
+    }
+
+    const previous = await importLocalStrings();
+    if(update.lang) localStrings.lang = update.lang;
+    if(update.langSign) localStrings.langSign = update.langSign;
+    if(!lastAppliedLangCode) {
+      return;
+    }
+
+    previous.forEach((module) => Object.keys(module.default).forEach((key) => {
+      strings.delete(key as LangPackKey);
+      untranslatedKeys.delete(key as LangPackKey);
+    }));
+    (await importLocalStrings()).forEach((module) => {
+      formatLocalStrings(module.default).forEach((string) => {
+        // marked as getLangPackAndApply and applyLangPack mark them: English laid over a right-to-left pack is a
+        // fallback, isolated left to right
+        (string as LocalLangPackString).local = true;
+        strings.set(string.key as LangPackKey, string);
+        if(languageRTL) untranslatedKeys.add(string.key as LangPackKey);
+      });
+    });
+    updateElements();
   }
 
   function pushNextArgument(out: ReturnType<typeof superFormatter>, args: FormatterArguments, indexHolder: {i: number}, i?: number) {
@@ -458,7 +511,7 @@ namespace I18n {
           if(wrappedUrl.onclick) a.setAttribute('onclick', wrappedUrl.onclick + '(this)');
           setBlankToAnchor(a);
         } else {
-          a = args[indexHolder.i++] as HTMLAnchorElement;
+          a = args?.[indexHolder.i++] as HTMLAnchorElement;
 
           if(a instanceof DocumentFragment) { // right after wrapRichText
             a = a.firstChild as any;
@@ -904,6 +957,7 @@ export async function checkLangPackForUpdates() {
   const storedLangPack = await I18n.getCacheLangPack();
   // * a pack stored before its language's direction was kept asks the server once
   if(storedLangPack.rtl === undefined) {
+    // oxlint-disable-next-line tweb/managers-before-await -- the pack is the app's, any account fetches it
     const language = await rootScope.managers.appLangPackManager.getLanguage(storedLangPack.lang_code, 'web').catch((): undefined => undefined);
     if(language && storedLangPack.lang_code === I18n.getLastRequestedLangCode()) {
       storedLangPack.rtl = !!language.pFlags.rtl;
@@ -911,6 +965,7 @@ export async function checkLangPackForUpdates() {
     }
   }
 
+  // oxlint-disable-next-line tweb/managers-before-await -- the pack is the app's, any account fetches it
   const difference = await rootScope.managers.appLangPackManager.getDifference(storedLangPack.lang_code, storedLangPack.version);
   if(difference.version > storedLangPack.version) {
     return handleUpdateLangPack({difference});
@@ -923,3 +978,11 @@ rootScope.addEventListener('langpack_update_too_long', handleUpdateLangPackTooLo
 rootScope.addEventListener('state_cleared', handleStateCleared);
 
 MOUNT_CLASS_TO && (MOUNT_CLASS_TO.I18n = I18n);
+
+// An edit of the strings, or the version bump every dev-server start writes (watch-lang.js), would otherwise reload
+// every open page of the checkout. This module must stay out of the workers for that: they have no HMR client.
+if(import.meta.hot) {
+  import.meta.hot.accept(['../lang', '../langSign', '../langPackLocalVersion'], ([lang, langSign, version]) => {
+    I18n.applyLocalUpdate({lang: lang as any, langSign: langSign as any, version: version?.default});
+  });
+}

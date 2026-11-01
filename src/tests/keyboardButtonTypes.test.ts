@@ -1,6 +1,16 @@
 import '@helpers/peerIdPolyfill';
 import {IntersectionObserverMock} from '@/tests/mocks/intersectionObserver';
 import type {KeyboardButton, KeyboardInlineButton, PageButton, ReplyMarkup} from '@layer';
+import * as mocked1 from '@lib/appImManager';
+import * as mocked2 from '@components/sidebarRight';
+import {registerHotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
+
+// the code under test reads the top level from the registry, not from the modules mocked above
+registerHotReloadGuard({
+  appImManager: (mocked1 as any).default,
+  appSidebarRight: (mocked2 as any).default
+});
+
 
 const mocks = vi.hoisted(() => ({
   setInnerPeer: vi.fn(),
@@ -18,7 +28,6 @@ vi.mock('@components/confirmationPopup', () => ({default: vi.fn()}));
 vi.mock('@components/toast', () => ({toast: vi.fn(), toastNew: mocks.toastNew}));
 vi.mock('@components/wrappers/customEmoji', () => ({default: vi.fn()}));
 vi.mock('@components/chat/bubbleParts/replyMarkupLayout', () => ({default: {Button: vi.fn()}}));
-vi.mock('@lib/solidjs/hotReloadGuardProvider', () => ({default: class {}}));
 vi.mock('@lib/rootScope', () => ({default: {managers: {appMessagesManager: {sendText: mocks.sendText}}, addEventListener: vi.fn(), dispatchEvent: vi.fn()}}));
 vi.mock('@helpers/clipboard', () => ({copyTextToClipboard: mocks.copyTextToClipboard}));
 vi.mock('@lib/appImManager', () => ({default: {setInnerPeer: mocks.setInnerPeer}}));
@@ -34,9 +43,9 @@ beforeAll(async() => {
   ({getKeyboardButtonHandler, getRichPageButtonHandler} = await import('@components/wrappers/keyboardButton'));
 });
 
-function makeChat(threadId?: number) {
+function makeChat(threadId?: number, peerId = (5 as UserId).toPeerId(false)) {
   return {
-    peerId: (5 as UserId).toPeerId(false),
+    peerId,
     threadId,
     input: {openPollCreation: vi.fn(), getEphemeralSendingSnapshot: (): undefined => undefined},
     appImManager: {requestLocation: vi.fn(), requestPhone: vi.fn()}
@@ -125,6 +134,22 @@ describe('a reply keyboard shown in a topic answers in that topic', () => {
     expect(mocks.sendText).toHaveBeenCalledWith({
       peerId: chat.peerId,
       threadId: 42,
+      text: 'Hello'
+    });
+  });
+
+  test('in a group a plain button answers the keyboard\'s message, for a bot that hears only what is meant for it', () => {
+    const chat = makeChat(42, (6 as ChatId).toPeerId(true));
+    getKeyboardButtonHandler({
+      button: replyButton({_: 'buttonTypeDefault'}, 'Hello'),
+      chat: chat as any,
+      replyMarkup
+    }).onClick(new MouseEvent('click'));
+
+    expect(mocks.sendText).toHaveBeenCalledWith({
+      peerId: chat.peerId,
+      threadId: 42,
+      replyToMsgId: 77,
       text: 'Hello'
     });
   });

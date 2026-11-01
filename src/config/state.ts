@@ -128,13 +128,16 @@ export type StateSettings = {
   savedAsForum: boolean,
   notifyAllAccounts: boolean,
   tabsInSidebar: boolean,
+  showPeerIds: boolean,
   /** Ids of the settings-search results picked last, most recent first. */
   settingsSearchRecent: string[],
   seenTooltips: {
     storySound: boolean,
     noForwards: boolean,
     sidebarResize: boolean,
-    guestBotPrivacy: number // how many times the guest-bot hint has been shown (capped at 2, like iOS)
+    guestBotPrivacy: number, // how many times the guest-bot hint has been shown (capped at 2, like iOS)
+    storyReactions: boolean, // * "long tap for more reactions" on a story's heart, once ever (iOS, Android)
+    storyStealthReply: boolean // * the warning that a reply or reaction shows you in Stealth Mode, once ever (iOS)
   },
   playbackParams: ReturnType<AppMediaPlaybackController['getPlaybackParams']>,
   translations: {
@@ -207,6 +210,11 @@ export type StateSettings = {
     nightMode?: boolean,
     selectedThemeId: string
   },
+  stories: {
+    // other people's story videos play in their original quality, not the lower one the server keeps
+    // beside it — Premium only, as on iOS and Android (Android's default: on)
+    highQuality: boolean
+  }
 };
 
 // (1 - use swatch, 2 - use picker color), (color from swatch), (color from picker)
@@ -242,7 +250,10 @@ export type State = {
   topPeersCache: {
     [type in TopPeerType]?: {
       peers: MyTopPeer[],
-      cachedTime: number
+      cachedTime: number,
+      // * `contacts.topPeersDisabled`: the user turned the lists off. Missing from a list kept before
+      // * the switch was there: an empty one of those says nothing of it
+      disabled?: boolean
     }
   },
   recentSearch: PeerId[],
@@ -251,8 +262,14 @@ export type State = {
   version: typeof STATE_VERSION,
   build: typeof BUILD,
   authState: AuthState,
+  /** Who it is kept for: Web A signs other users in and out of the same slot (see loadState) */
+  userId?: UserId,
   /** Key: `getPinnedMessagesKey(peerId, threadId)` — thread-scoped in a forum topic. */
   hiddenPinnedMessages: {[peerIdOrThreadKey: string]: number},
+  /** Key: a history storage's (a topic's is its own), value: the message of the bot keyboard the user closed there. */
+  closedReplyKeyboards: {[historyStorageKey: string]: number},
+  /** Key: a history storage's, value: the message of the force reply whose answer in the field the user dropped there. */
+  droppedForceReplies: {[historyStorageKey: string]: number},
   hideChatJoinRequests: {[peerId: PeerId]: number},
   botConnectionReviews: BotConnectionReview[],
   // stateId?: number, // ! DEPRECATED
@@ -549,6 +566,7 @@ export const SETTINGS_INIT: StateSettings = {
   savedAsForum: false,
   notifyAllAccounts: true,
   tabsInSidebar: false,
+  showPeerIds: false,
   settingsSearchRecent: [],
   playbackParams: {
     volume: 1,
@@ -568,7 +586,9 @@ export const SETTINGS_INIT: StateSettings = {
     storySound: false,
     noForwards: false,
     sidebarResize: false,
-    guestBotPrivacy: 0
+    guestBotPrivacy: 0,
+    storyReactions: false,
+    storyStealthReply: false
   },
   translations: {
     peers: {},
@@ -605,6 +625,9 @@ export const SETTINGS_INIT: StateSettings = {
   contactsSortMode: 'online',
   qrCode: {
     selectedThemeId: ''
+  },
+  stories: {
+    highQuality: true
   }
 };
 
@@ -631,7 +654,10 @@ export const STATE_INIT: State = {
   authState: {
     _: IS_MOBILE ? 'authStateSignIn' : 'authStateSignQr'
   },
+  userId: undefined,
   hiddenPinnedMessages: {},
+  closedReplyKeyboards: {},
+  droppedForceReplies: {},
   hideChatJoinRequests: {},
   botConnectionReviews: [],
   // stateId: nextRandomUint(32),

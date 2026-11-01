@@ -12,9 +12,9 @@ import {ChatBackground as ChatBackgroundLayer} from '@components/chat/bubbles/ch
 import {BaseTheme, Document, WallPaper, WebDocument} from '@layer';
 import {MyDocument} from '@appManagers/appDocsManager';
 import appDownloadManager, {AppDownloadManager} from '@lib/appDownloadManager';
-import appImManager from '@lib/appImManager';
 import I18n from '@lib/langPack';
 import rootScope from '@lib/rootScope';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 import {i18n} from '@lib/langPack';
 import {useAppSettings} from '@stores/appSettings';
 import {unwrap} from 'solid-js/store';
@@ -23,7 +23,6 @@ import Row from '@components/rowTsx';
 import Button from '@components/buttonTsx';
 import CheckboxFieldTsx from '@components/checkboxFieldTsx';
 import ProgressivePreloader from '@components/preloader';
-import {AppBackgroundColorTab} from '@components/solidJsTabs/tabs';
 import {AppTheme, AppThemeSettings} from '@config/state';
 import {blendWallpaperForTinted} from '@config/themePresets';
 import themeController from '@helpers/themeController';
@@ -36,6 +35,7 @@ import ListenerSetter from '@helpers/listenerSetter';
 import LazyLoadQueue from '@components/lazyLoadQueue';
 import {subscribeOn} from '@helpers/solid/subscribeOn';
 import {useSuperTab} from '@components/solidJsTabs/superTabProvider';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 
 const needBlur = (wallPaper: WallPaper, respectPattern = true) => {
   const blur = (wallPaper as WallPaper.wallPaper)?.settings?.pFlags?.blur;
@@ -149,6 +149,7 @@ export class AppBackgroundTab {
     wallPaper: WallPaper,
     themeSettings?: AppThemeSettings
   ) => {
+    const managers = bindManagersToSession(rootScope.managers);
     const _tempId = ++AppBackgroundTab.tempId;
     const middleware = () => _tempId === AppBackgroundTab.tempId;
 
@@ -157,7 +158,7 @@ export class AppBackgroundTab {
     let download: Promise<void> | ReturnType<AppDownloadManager['downloadMediaURL']>;
     const downloadWallPaper = () => appDownloadManager.downloadMediaURL({
       media: doc,
-      queueId: appImManager.chat.bubbles ? appImManager.chat.bubbles.lazyLoadQueue.queueId : 0
+      queueId: hotReloadGuard.appImManager.chat.bubbles ? hotReloadGuard.appImManager.chat.bubbles.lazyLoadQueue.queueId : 0
     });
     if(doc) {
       download = downloadWallPaper();
@@ -219,7 +220,7 @@ export class AppBackgroundTab {
             themeController.setWallpaperForCurrentTheme(wallPaper, hsla);
           }
 
-          appImManager.applyCurrentTheme({
+          hotReloadGuard.appImManager.applyCurrentTheme({
             slug,
             backgroundUrl: url,
             broadcastEvent: true
@@ -232,7 +233,7 @@ export class AppBackgroundTab {
         return;
       }
 
-      const cacheContext = await rootScope.managers.thumbsStorage.getCacheContext(doc);
+      const cacheContext = await managers.thumbsStorage.getCacheContext(doc);
       if(needBlur(wallPaper)) {
         setTimeout(async() => {
           try {
@@ -241,7 +242,7 @@ export class AppBackgroundTab {
               return;
             }
 
-            const currentCacheContext = await rootScope.managers.thumbsStorage.getCacheContext(doc);
+            const currentCacheContext = await managers.thumbsStorage.getCacheContext(doc);
             const sourceUrl = currentCacheContext.url || await downloadWallPaper();
             if(!middleware()) {
               deferred.resolve();
@@ -385,6 +386,8 @@ const ChatBackground = () => {
   });
 
   const onUploadClick = () => {
+    // * the account session the wallpaper is for: a switch to another account while a file is picked leaves it there
+    const managers = bindManagersToSession(rootScope.managers);
     requestFile('image/x-png,image/png,image/jpeg').then(async(file) => {
       try {
         file = await prepareWallPaperImage(file);
@@ -394,19 +397,19 @@ const ChatBackground = () => {
         return;
       }
 
-      const wallPaper = await rootScope.managers.appDocsManager.prepareWallPaperUpload(file);
+      const wallPaper = await managers.appDocsManager.prepareWallPaperUpload(file);
       // Seed ChatBackgroundStore with the local blob URL so the picker thumbnail
       // (which now goes through `<ChatBackground>` → ChatBackgroundStore.getBackground)
       // resolves the in-progress upload preview without trying to hit the network.
       const uploadDoc = (wallPaper as WallPaper.wallPaper).document as Document.document;
       if(uploadDoc) {
-        const cacheContext = await rootScope.managers.thumbsStorage.getCacheContext(uploadDoc);
+        const cacheContext = await managers.thumbsStorage.getCacheContext(uploadDoc);
         ChatBackgroundStore.setBackgroundUrlToCache({
           slug: (wallPaper as WallPaper.wallPaper).slug,
           url: cacheContext.url
         });
       }
-      const uploadPromise = rootScope.managers.appDocsManager.uploadWallPaper(wallPaper.id);
+      const uploadPromise = managers.appDocsManager.uploadWallPaper(wallPaper.id);
       const uploadDeferred: CancellablePromise<any> = appDownloadManager.getNewDeferredForUpload(file.name, uploadPromise);
 
       const deferred = deferredPromise<void>();
@@ -532,8 +535,9 @@ const ChatBackground = () => {
   // Build synchronously from the cached list (warmed by the General Settings preload, or a prior
   // open) so the grid + its skeleton tiles are present in the very first frame of the tab-open
   // slide, instead of popping in when the async getWallPapers resolves (around when the slide ends).
-  if(ChatBackgroundStore.cachedWallPapers) {
-    buildGrid(ChatBackgroundStore.cachedWallPapers);
+  const cachedWallPapers = ChatBackgroundStore.getCachedWallPapers();
+  if(cachedWallPapers) {
+    buildGrid(cachedWallPapers);
   }
 
   // Always refresh from the server: keep the cache warm for the next open, and build now if the
@@ -543,7 +547,7 @@ const ChatBackground = () => {
 
   createEffect(on(wallPapersResource, (wallPapers) => {
     if(!wallPapers) return;
-    ChatBackgroundStore.cachedWallPapers = wallPapers;
+    ChatBackgroundStore.setCachedWallPapers(wallPapers);
     if(!loaded()) {
       buildGrid(wallPapers);
     }
@@ -578,7 +582,7 @@ const ChatBackground = () => {
           class="btn-primary btn-transparent"
           icon="colorize"
           text="SetColor"
-          onClick={() => tab.slider.createTab(AppBackgroundColorTab).open()}
+          onClick={() => tab.slider.createTab(hotReloadGuard.tabs.AppBackgroundColorTab).open()}
         />
         <Button
           class="btn-primary btn-transparent"

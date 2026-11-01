@@ -26,6 +26,13 @@ import {BubbleTimelineKey, compareBubbleTimelineKeys, isPendingTimelineMessage, 
 import filterReplyMarkupRows from '@components/chat/bubbleParts/filterReplyMarkupRows';
 import updateChatThreadSeparators from '@components/chat/bubbleParts/updateChatThreadSeparators';
 
+/**
+ * Where the sends still on their way stand behind an earlier send that has taken its server id: one place
+ * for all of them, so among themselves they go by date and id — in the order they were sent, whichever
+ * bubble came in first (`compareBubbleTimelineKeys`). Below the temporary id a send made after them takes
+ * from that server id (+0.0001, `generateTempMessageId`), which so comes after them.
+ */
+const BEHIND_SENT = 0.00005;
 
 type GroupItem = {
   bubble: HTMLElement,
@@ -362,6 +369,8 @@ export class BubbleGroup {
 
   onItemUnmount() {
     if(!this.mounted) {
+      // * emptied before it was ever mounted: it has left the list for good all the same (removeItem)
+      if(!this.items.length) this.middlewareHelper.destroy();
       return;
     }
 
@@ -371,7 +380,9 @@ export class BubbleGroup {
       this.dateContainer = undefined;
       this.chat.bubbles.deleteEmptyDateGroups();
       this.mounted = false;
-      this.middlewareHelper.clean();
+      // * destroyed, not cleaned: an empty group has left the list for good (removeItem, and nothing puts a bubble
+      // * into it again), and what it owns - its avatar's root - goes now rather than when the chat is left
+      this.middlewareHelper.destroy();
       this.groups?.updateGroupsClassNames();
     } else {
       this.updateClassNames();
@@ -793,16 +804,33 @@ export default class BubbleGroups {
 
   private getTimelinePosition(message: MyMessage | AdminLog, mid: number) {
     let position = this.positions.get(mid);
-    if(
-      position === undefined &&
-      this.compareItems &&
-      isEphemeralMessage(message) &&
-      !isPendingTimelineMessage(message)
-    ) {
-      this.positions.set(mid, position = this.getEphemeralPosition(message.date));
+    if(position === undefined && this.compareItems) {
+      position = isPendingTimelineMessage(message) ?
+        this.getLateSendPosition(mid) :
+        isEphemeralMessage(message) ? this.getEphemeralPosition(message.date) : undefined;
+      if(position !== undefined) {
+        this.positions.set(mid, position);
+      }
     }
 
     return position ?? mid;
+  }
+
+  /**
+   * Where a send still on its way goes when its bubble comes in after an earlier send has taken its server id
+   * (`ChatBubbles.changedMids`): behind that one, where `raiseLaterSends` would have put it had the bubble been
+   * in by then. Sends follow so fast that this is common: a bubble rendered at its temporary id above the
+   * earlier one, then moved, made the chat jump.
+   */
+  private getLateSendPosition(mid: number) {
+    let sentPosition: number;
+    for(const [tempMid, sentMid] of this.chat.bubbles.changedMids) {
+      if(tempMid < mid && sentMid > mid && (sentPosition === undefined || sentMid > sentPosition)) {
+        sentPosition = sentMid;
+      }
+    }
+
+    return sentPosition === undefined ? undefined : sentPosition + BEHIND_SENT;
   }
 
   /**
@@ -842,9 +870,9 @@ export default class BubbleGroups {
       return key.pending && key.mid > sent.mid && key.position < position;
     }).reverse(); // in the order they stand
 
-    later.forEach((item, idx) => {
-      this.positions.set(item.timelineKey.mid, position + (idx + 1) * 0.0001);
-    });
+    for(const item of later) {
+      this.positions.set(item.timelineKey.mid, position + BEHIND_SENT);
+    }
 
     return later;
   }

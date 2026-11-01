@@ -9,7 +9,7 @@ import getAudioTitles from '@appManagers/utils/docs/getAudioTitles';
 import MediaProgressLine from '@components/mediaProgressLine';
 import VolumeSelector from '@components/volumeSelector';
 import wrapEmojiText from '@lib/richTextProcessor/wrapEmojiText';
-import {AppManagers} from '@lib/managers';
+import {TabManagers} from '@lib/managers';
 import getFwdFromName from '@appManagers/utils/messages/getFwdFromName';
 import toHHMMSS from '@helpers/string/toHHMMSS';
 import {PlaybackRateButton} from '@components/playbackRateButton';
@@ -22,13 +22,13 @@ import {ChatType} from './chatType';
 import type {AppImManager} from '@lib/appImManager';
 import findUpClassName from '@helpers/dom/findUpClassName';
 import toggleDisability from '@helpers/dom/toggleDisability';
-import appSidebarRight from '../sidebarRight';
 import {openSavedMusicTab} from '@components/savedMusicActions';
 import TopbarPlate, {createTopbarPlate} from '@components/chat/topbarPlate';
 import Button from '@components/buttonTsx';
 import documentFragmentToNodes from '@helpers/dom/documentFragmentToNodes';
 import classNames from '@helpers/string/classNames';
 import {setDirection} from '@helpers/dom/setInnerHTML';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 
 export type ChatAudioController = {
   container: HTMLElement,
@@ -37,7 +37,7 @@ export type ChatAudioController = {
 
 export default function createChatAudio(
   appImManager: AppImManager,
-  managers: AppManagers
+  managers: TabManagers
 ): ChatAudioController {
   const listenerSetter = new ListenerSetter();
   let duration: number;
@@ -205,7 +205,7 @@ export default function createChatAudio(
     const peerId = plate.container.dataset.peerId.toPeerId();
     const savedMusicDocId = plate.container.dataset.savedMusicDocId;
     if(savedMusicDocId) {
-      openSavedMusicTab(appSidebarRight, peerId);
+      openSavedMusicTab(hotReloadGuard.appSidebarRight, peerId);
       return;
     }
 

@@ -6,7 +6,6 @@
  */
 
 import type {TrueDcId} from '@types';
-import langPackLocalVersion from '@/langPackLocalVersion';
 
 export const MAIN_DOMAINS = import.meta.env.VITE_ALLOWED_HOSTS ?
   import.meta.env.VITE_ALLOWED_HOSTS.split(',').map((d) => d.replace(/^https?:\/\//, '').replace(/\/$/, '').trim()) :
@@ -23,7 +22,6 @@ const App = {
   versionFull: import.meta.env.VITE_VERSION_FULL,
   build: +import.meta.env.VITE_BUILD,
   langPackVersion: +import.meta.env.VITE_LANG_PACK_VERSION,
-  langPackLocalVersion: langPackLocalVersion,
   langPack: 'webk',
   langPackCode: 'en',
   domains: MAIN_DOMAINS,
@@ -35,5 +33,10 @@ const App = {
   cryptoWorkers: threads,
   interclientBroadcastChannel: 'tgweb'
 };
+
+// * "Teleram WebK 2.2 (684)" - how the app names itself, in the main menu and under Settings
+export function getAppVersionText() {
+  return `${import.meta.env.VITE_APP_NAME || 'Telegram'} Web${App.suffix} ${App.version} (${App.build})`;
+}
 
 export default App;

@@ -86,6 +86,8 @@ function makeChat(type = ChatType.Chat) {
   document.body.append(root);
   const middlewareHelper = getMiddleware();
   const dateContainers = new Map<number, {container: HTMLElement, groupsLength: number}>();
+  /** the server ids the sends took, by temporary id (`message_sent`) */
+  const changedMids = new Map<number, number>();
   const chat: any = {
     type,
     peerId: PEER_ID,
@@ -109,22 +111,38 @@ function makeChat(type = ChatType.Chat) {
 
         return dateContainer;
       },
-      deleteEmptyDateGroups: () => {}
-    }
+      deleteEmptyDateGroups: () => {},
+      changedMids
+    },
+    selection: {isSelecting: false},
+    getMessageByPeer: (_: PeerId, mid: number) => mirror.get(mid)
   };
+  /** the messages as the mirror has them, once the server has taken them (`sent`) */
+  const mirror = new Map<number, TestMessage>();
 
   const bubbleGroups = new BubbleGroups(chat);
   const bubblesToReplace = new Map<HTMLElement, {regroupMessage?: Message.message}>();
+  /** the chat's bubbles by full mid, as `getBubble` reads them */
+  const registry: Record<string, HTMLElement> = {};
   const harness = Object.assign(Object.create(ChatBubbles.prototype), {
     chat,
+    chatInner: root,
+    bubbles: registry,
+    changedMids,
     bubbleGroups,
     bubblesToReplace,
     isAvatarNeeded: () => false,
     createScrollSaver: () => {
       ++scrollSaves;
       return {save: () => {}, restore: () => {}};
-    }
+    },
+    setUnreadDelimiter: (): void => undefined,
+    prepareToSaveScroll: () => ({}),
+    lazyLoadQueue: {setAllSeen: () => {}},
+    // the bubble's own render is not what these tests look at
+    safeRenderMessage: (): void => undefined
   }) as any;
+  const batchLog = Object.assign(() => {}, {groupCollapsed: () => {}, groupEnd: () => {}});
   let scrollSaves = 0;
 
   const bubbles = new Map<string, HTMLElement>();
@@ -153,6 +171,38 @@ function makeChat(type = ChatType.Chat) {
         reverse: false
       })));
       bubbleGroups.mountUnmountGroups(groups);
+    },
+    /** renders under way: each bubble registered under its message, its result queued (`safeRenderMessage`) */
+    startRendering(...messages: TestMessage[]) {
+      return messages.map((message) => {
+        const bubble = makeBubble(message);
+        registry[harness.makeFullMid(message)] = bubble;
+        return {bubble, message, reverse: false, promises: [] as Promise<any>[], updatePosition: true};
+      });
+    },
+    /** the batch that files and mounts finished renders (`processBatch`) */
+    batch(queue: Array<{bubble: HTMLElement, message: TestMessage}>) {
+      return harness.processBatch(queue, <T>(promise: T) => promise, batchLog);
+    },
+    /** a send's server id taken over by its bubble wherever its render stands, as `message_sent` does it */
+    sent(message: TestMessage, mid: number) {
+      const bubble = bubbles.get(message.name);
+      mirror.set(mid, confirmed(message, mid));
+      harness.changedMids.set(message.mid, mid);
+      delete registry[harness.makeFullMid(message)];
+      registry[harness.makeFullMid(confirmed(message, mid))] = bubble;
+      bubble.dataset.mid = '' + mid;
+    },
+    /** an album's bubble, rendered by `was`, rendered again with the items it has now (`rerenderGroupedBubble`) */
+    rerenderAlbum(was: TestMessage, main: TestMessage) {
+      const bubble = bubbles.get(was.name);
+      const fullMid = harness.makeFullMid(was);
+      registry[fullMid] = bubble;
+      harness.rerenderGroupedBubble(bubble, fullMid, main);
+    },
+    /** the messages the chat holds as rendered, top to bottom */
+    history() {
+      return harness.getRenderedHistory('asc');
     },
     /** the server's identity for a message already on screen */
     update(message: TestMessage, options?: {regroup?: boolean}) {
@@ -318,6 +368,105 @@ describe('a send the server confirms', () => {
     chat.expectConsistent();
   });
 
+  test('puts a send whose bubble comes in after an earlier send was confirmed behind that one', async() => {
+    const chat = makeChat();
+    chat.render(incoming('x', 100, T));
+    const a = sending('a', 100.0001, T + 10);
+    const b = sending('b', 100.0002, T + 11);
+    const c = sending('c', 100.0003, T + 12);
+    await chat.batch(chat.startRendering(a));
+
+    // sent in a burst: the server takes `a` before the bubbles of `b` and `c` are in
+    chat.sent(a, 102);
+    chat.update(confirmed(a, 102));
+    await chat.batch(chat.startRendering(b));
+    expect(chat.order()).toEqual(['x', 'a', 'b']);
+    chat.render(incoming('i', 101, T + 9));
+    expect(chat.order()).toEqual(['x', 'i', 'a', 'b']);
+    await chat.batch(chat.startRendering(c));
+
+    expect(chat.order()).toEqual(['x', 'i', 'a', 'b', 'c']);
+    expect(chat.groups()).toEqual([['x', 'i'], ['a', 'b', 'c']]);
+    chat.expectConsistent();
+
+    chat.sent(c, 103);
+    chat.update(confirmed(c, 103));
+    expect(chat.order()).toEqual(['x', 'i', 'a', 'b', 'c']);
+    chat.sent(b, 104);
+    chat.update(confirmed(b, 104));
+
+    // `b` takes an id past `c`'s, and moves behind it then, as it would have with its bubble in all along
+    expect(chat.order()).toEqual(['x', 'i', 'a', 'c', 'b']);
+    chat.expectConsistent();
+  });
+
+  test('puts a late bubble behind an earlier send the server took before its own bubble came in', async() => {
+    const chat = makeChat();
+    chat.render(incoming('x', 100, T));
+    const a = sending('a', 100.0001, T + 10);
+    const b = sending('b', 100.0002, T + 11);
+    const queue = chat.startRendering(a);
+    chat.sent(a, 101);
+    await chat.batch(queue);
+    chat.update(confirmed(a, 101));
+    chat.render(incoming('i', 102, T + 12));
+    await chat.batch(chat.startRendering(b));
+
+    expect(chat.order()).toEqual(['x', 'a', 'b', 'i']);
+    chat.expectConsistent();
+  });
+
+  test('keeps late bubbles in the order they were sent, whichever comes in first', async() => {
+    const chat = makeChat();
+    chat.render(incoming('x', 100, T));
+    const a = sending('a', 100.0001, T + 10);
+    const [b, c, d, e] = [100.0002, 100.0003, 100.0004, 100.0005].map((mid, idx) => sending('bcde'[idx], mid, T + 11 + idx));
+    await chat.batch(chat.startRendering(a));
+    await chat.batch(chat.startRendering(b));
+    chat.sent(a, 102);
+    chat.update(confirmed(a, 102));
+    expect(chat.order()).toEqual(['x', 'a', 'b']);
+
+    // * an upload's bubble comes in after the texts sent behind it
+    await chat.batch(chat.startRendering(e));
+    await chat.batch(chat.startRendering(c));
+    await chat.batch(chat.startRendering(d));
+
+    expect(chat.order()).toEqual(['x', 'a', 'b', 'c', 'd', 'e']);
+    chat.expectConsistent();
+  });
+
+  test('puts a send made after the earlier ones were moved behind a confirmed one after them', async() => {
+    const chat = makeChat();
+    chat.render(incoming('x', 100, T));
+    const a = sending('a', 100.0001, T + 10);
+    const b = sending('b', 100.0002, T + 11);
+    chat.render(a);
+    chat.render(b);
+    chat.sent(a, 101);
+    chat.update(confirmed(a, 101));
+
+    // * the next temporary id is a step past the server id `a` took
+    chat.render(sending('c', 101.0001, T + 12));
+
+    expect(chat.order()).toEqual(['x', 'a', 'b', 'c']);
+    chat.expectConsistent();
+  });
+
+  test('leaves a long upload rendered late above the messages sent after it', async() => {
+    const chat = makeChat();
+    chat.render(incoming('x', 100, T));
+    const f = sending('f', 100.0001, T + 1);
+    const t1 = sending('t1', 100.0002, T + 5);
+    await chat.batch(chat.startRendering(t1));
+    chat.sent(t1, 101);
+    chat.update(confirmed(t1, 101));
+    await chat.batch(chat.startRendering(f));
+
+    expect(chat.order()).toEqual(['x', 'f', 't1']);
+    chat.expectConsistent();
+  });
+
   test('keeps a send above a message the server made after it', () => {
     const chat = makeChat();
     chat.render(incoming('x', 100, T));
@@ -427,6 +576,92 @@ describe('a send the server confirms', () => {
 
     expect(chat.order()).toEqual(['x', 'a', 'i']);
     expect(transaction.regroupMessage).toBe(final);
+    chat.expectConsistent();
+  });
+
+  test('shows the sends the server took before the batch that mounts them began', async() => {
+    const chat = makeChat();
+    chat.render(incoming('x', 100, T));
+    const a = sending('a', 100.0001, T + 10);
+    await chat.batch(chat.startRendering(a));
+    chat.sent(a, 101);
+    chat.update(confirmed(a, 101));
+
+    // sent in a burst: b and c wait for the next batch, and the server takes them meanwhile
+    const b = sending('b', 101.0001, T + 11);
+    const c = sending('c', 101.0002, T + 12);
+    const queue = chat.startRendering(b, c);
+    chat.sent(b, 102);
+    chat.sent(c, 103);
+    await chat.batch(queue);
+
+    expect(chat.order()).toEqual(['x', 'a', 'b', 'c']);
+    expect(chat.groups()).toEqual([['x'], ['a', 'b', 'c']]);
+    chat.expectConsistent();
+
+    // `history_update`, which waits for that batch
+    chat.update(confirmed(b, 102));
+    chat.update(confirmed(c, 103));
+
+    expect(chat.order()).toEqual(['x', 'a', 'b', 'c']);
+    expect(chat.groups()).toEqual([['x'], ['a', 'b', 'c']]);
+    chat.expectConsistent();
+  });
+
+  test('groups a scheduled send the server took before its batch began by the message it became', async() => {
+    const chat = makeChat(ChatType.Scheduled);
+    const a = sending('a', 100.0001, T + 600);
+    const queue = chat.startRendering(a);
+    chat.sent(a, 101);
+    await chat.batch(queue);
+
+    // a scheduled chat has no `history_update` to give it that identity later
+    expect(chat.history()).toEqual(['10_101']);
+    chat.expectConsistent();
+  });
+
+  test.each([
+    // `message_sent` came first, and found no bubble to give the id to
+    ['a send the server took before its render began', () => {
+      const a = sending('a', 100.0001, T + 10);
+      return {event: a, now: confirmed(a, 101), changedMids: new Map([[a.mid, 101]])};
+    }],
+    // the new message and its edit came in one batch, and the edit found no bubble to go to
+    ['a message edited in the batch it came in', () => {
+      const a = incoming('a', 101, T + 10);
+      return {event: a, now: {...a, message: 'a, edited', edit_date: T + 11}, changedMids: new Map<number, number>()};
+    }]
+  ])('renders %s as it is by now', async(_, make) => {
+    const {event, now, changedMids} = make();
+    const safeRenderMessage = vi.fn();
+    const harness = Object.assign(Object.create(ChatBubbles.prototype), {
+      log: {bindPrefix: () => () => {}},
+      chatInner: document.createElement('div'),
+      scrollable: {loadedAll: {top: true, bottom: true}},
+      changedMids,
+      chat: {getMessageByPeer: (peerId: PeerId, mid: number) => peerId === PEER_ID && mid === now.mid ? now : undefined},
+      batchProcessor: {},
+      safeRenderMessage,
+      checkIfEmptyPlaceholderNeeded: (): void => undefined
+    }) as any;
+
+    await harness.performHistoryResult({history: [event]}, false);
+
+    expect(safeRenderMessage).toHaveBeenCalledOnce();
+    expect(safeRenderMessage.mock.calls[0][0].message).toBe(now);
+  });
+});
+
+describe('an album', () => {
+  test('goes by its oldest item when that one comes after the album was rendered', () => {
+    const chat = makeChat();
+    chat.render(incoming('x', 99, T));
+    const b: TestMessage = {...incoming('b', 101, T + 1), grouped_id: 'g'};
+    chat.render(b); // the album as far as it has come: its second item
+
+    chat.rerenderAlbum(b, {...incoming('a', 100, T + 1), grouped_id: 'g'});
+
+    expect(chat.history()).toEqual(['10_99', '10_100']);
     chat.expectConsistent();
   });
 });

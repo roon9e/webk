@@ -1,7 +1,6 @@
-import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
 import AppSelectPeers, {SelectSearchPeerType} from '@components/appSelectPeers';
 import PopupElement, {createPopup, PopupContext, PopupContextValue} from '@components/popups/indexTsx';
-import I18n, {LangPackKey, i18n} from '@lib/langPack';
+import I18n, {FormatterArguments, LangPackKey, i18n} from '@lib/langPack';
 import {Modify} from '@types';
 import {IsPeerType} from '@appManagers/appPeersManager';
 import TransitionSlider from '@components/transition';
@@ -54,6 +53,7 @@ export type PopupPickUserOptions = Modify<ConstructorParameters<typeof AppSelect
   onCloseAfterTimeout?: () => void,
   middleware?: never,
   titleLangKey: LangPackKey,
+  titleLangArgs?: FormatterArguments,
   initial?: PeerId[],
   prependPeerIds?: PeerId[],
   useTopics?: boolean,
@@ -498,10 +498,6 @@ export default function showPickUserPopup(options: PopupPickUserOptions) {
       onFirstRender: () => {
         setShow(true);
         selector.checkForTriggers();
-
-        if(!IS_TOUCH_SUPPORTED && selector.inputSearch) {
-          selector.inputSearch.input.focus();
-        }
       },
       noPlaceholder: true,
       rippleEnabled: false,
@@ -522,10 +518,13 @@ export default function showPickUserPopup(options: PopupPickUserOptions) {
         className: 'popup-forward-top-peers collapsable',
         modifyPeers: (peers) => {
           findAndSplice(peers, (peer) => peer.id === rootScope.myId);
-          peers.unshift({
-            id: rootScope.myId,
-            rating: 0
-          });
+          // * Saved Messages leads the strip, unless the picker leaves it out as its list does
+          if(!options.exceptSelf) {
+            peers.unshift({
+              id: rootScope.myId,
+              rating: 0
+            });
+          }
           return peers;
         }
       });
@@ -618,13 +617,14 @@ export default function showPickUserPopup(options: PopupPickUserOptions) {
           options.onCloseAfterTimeout?.();
         }}
         btnConfirmOnEnter={options.btnConfirmOnEnter}
+        initialFocus={() => selector?.inputSearch?.input}
       >
         <PopupElement.Header>
           <PopupElement.CloseButton
             canGoBack={canGoBack()}
             onBackClick={onBackClick}
           />
-          <PopupElement.Title title={options.titleLangKey} />
+          <PopupElement.Title title={options.titleLangArgs ? i18n(options.titleLangKey, options.titleLangArgs) : options.titleLangKey} />
           {/* 'hidden' is the only mode where multiselect is available but off — 'disabled' has none
               to offer and 'enabled' is already selecting, so the button belongs to that state alone */}
           <Show when={multiSelectMode() === 'hidden'}>
@@ -786,6 +786,8 @@ export function showSharingPickerPopup(options: {
   chatRightsActions?: PopupPickUserOptions['chatRightsActions'],
   excludeMonoforums?: PopupPickUserOptions['excludeMonoforums'],
   excludeBotforums?: PopupPickUserOptions['excludeBotforums'],
+  exceptSelf?: PopupPickUserOptions['exceptSelf'],
+  useTopics?: PopupPickUserOptions['useTopics'],
   placeholder?: LangPackKey,
   selfPresence?: LangPackKey,
   // Multi-select toggle for the picker. `true` ⇒ checkboxes, user confirms a

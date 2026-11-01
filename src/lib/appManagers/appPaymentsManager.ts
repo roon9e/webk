@@ -57,6 +57,11 @@ export default class AppPaymentsManager extends AppManager {
     };
   }
 
+  /** What the server knows of a bank card number in a message: its issuer and where to look it up. */
+  public getBankCardData(number: string) {
+    return this.apiManager.invokeApiSingle('payments.getBankCardData', {number});
+  }
+
   public getPaymentForm(invoice: InputInvoice) {
     return this.apiManager.invokeApi('payments.getPaymentForm', {
       invoice,
@@ -309,36 +314,39 @@ export default class AppPaymentsManager extends AppManager {
   }
 
   public getStarsStatus(overwrite?: boolean) {
-    if(overwrite) {
-      this.starsStatus = undefined;
-    }
-
-    return this.starsStatus ??= this.apiManager.invokeApiSingleProcess({
-      method: 'payments.getStarsStatus',
-      params: {
-        peer: this.getStarsOwnerInputPeer()
-      },
-      processResult: (starsStatus) => {
-        return this.starsStatus = this.saveStarsStatus(starsStatus);
-      }
-    });
+    return this.loadStarsStatus('starsStatus', overwrite);
   }
 
   public getStarsStatusTon(overwrite?: boolean) {
+    return this.loadStarsStatus('starsStatusTon', overwrite);
+  }
+
+  private loadStarsStatus(key: 'starsStatus' | 'starsStatusTon', overwrite?: boolean) {
     if(overwrite) {
-      this.starsStatusTon = undefined;
+      this[key] = undefined;
     }
 
-    return this.starsStatusTon ??= this.apiManager.invokeApiSingleProcess({
+    if(this[key]) {
+      return this[key];
+    }
+
+    const promise = this[key] = this.apiManager.invokeApiSingleProcess({
       method: 'payments.getStarsStatus',
       params: {
         peer: this.getStarsOwnerInputPeer(),
-        ton: true
+        ton: key === 'starsStatusTon' || undefined
       },
       processResult: (starsStatus) => {
-        return this.starsStatusTon = this.saveStarsStatus(starsStatus);
+        return this[key] = this.saveStarsStatus(starsStatus);
       }
     });
+
+    // a request that failed is not the balance: the next one asks again
+    promise.catch(() => {
+      if(this[key] === promise) this[key] = undefined;
+    });
+
+    return promise;
   }
 
   public getPeerStarsStatus(peerId: PeerId, ton?: boolean) {

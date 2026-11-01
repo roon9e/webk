@@ -9,7 +9,7 @@
  * sandbox surfaces that list, so "this popup renders empty" points straight at the call to fill in.
  */
 
-import type {AppManagers} from '@lib/managers';
+import type {AppManagers, TabManagers} from '@lib/managers';
 import {SETTINGS_INIT, STATE_INIT} from '@config/state';
 import {
   aiToneExample,
@@ -80,7 +80,7 @@ export const mockAppConfig = {
   aicompose_tone_title_length_max: 32,
   aicompose_tone_saved_limit_default: 3,
   aicompose_tone_saved_limit_premium: 10,
-  premium_promo_order: ['stories', 'double_limits', 'more_upload', 'faster_download'],
+  premium_promo_order: ['stories', 'double_limits', 'more_upload', 'faster_download', 'wallpapers'],
   verify_age_bot_username: 'sandbox_bot',
   verify_age_country: 'GB',
   freeze_appeal_url: 'https://t.me/spambot',
@@ -166,7 +166,9 @@ function createDefaultHandlers(): ManagerHandlers {
     },
     appStoriesManager: {
       getUnreadType: () => undefined,
-      getPeerStoriesSegments: () => undefined
+      getPeerStoriesSegments: () => undefined,
+      // * avatars of peers the feed does not follow ask what they have in stories while in sight
+      pollPeersStories: () => undefined
     },
     appNotificationsManager: {
       getNotifyPeerTypeSettings: () => undefined,
@@ -246,8 +248,8 @@ function createDefaultHandlers(): ManagerHandlers {
 }
 
 export type MockManagersController = {
-  /** Drop-in for `rootScope.managers`. */
-  managers: AppManagers,
+  /** Drop-in for `rootScope.managers` - and for whatever is bound from them, which they stay. */
+  managers: AppManagers & TabManagers,
   /** Every call the popups made, newest last. Handy for assertions in an automated run. */
   calls: ManagerCall[],
   /** Calls no handler answered — the to-do list for making a story render fully. */
@@ -311,7 +313,7 @@ export function createMockManagers(): MockManagersController {
   managers.all = createRootProxy((value) => [value]);
 
   const controller: MockManagersController = {
-    managers: managers as AppManagers,
+    managers: managers as AppManagers & TabManagers,
     calls,
     unhandled,
     override(handlers: ManagerHandlers) {

@@ -8,7 +8,7 @@ import ListenerSetter from '@helpers/listenerSetter';
 import createMiddleware from '@helpers/solid/createMiddleware';
 import {IS_SAFARI} from '@environment/userAgent';
 import {DEFAULT_THEME} from '@config/state';
-import {blendWallpaperForTinted} from '@config/themePresets';
+import {blendWallpaperForTinted, getCloudThemeWallpaper} from '@config/themePresets';
 import {BaseTheme, Theme} from '@layer';
 import rootScope from '@lib/rootScope';
 import I18n from '@lib/langPack';
@@ -16,6 +16,7 @@ import themeController from '@helpers/themeController';
 import liteMode from '@helpers/liteMode';
 import LottiePlayer from '@lib/lottie/lottiePlayer';
 import wrapStickerEmoji from '@components/wrappers/stickerEmoji';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 
 type ThemeItem = {
   container: HTMLElement;
@@ -166,6 +167,7 @@ export default function ChatThemesPicker(props: ChatThemesPickerProps) {
   const [themesPromise] = createResource(() => rootScope.managers.appThemesManager.getThemes());
 
   const buildThemes = async() => {
+    const managers = bindManagersToSession(rootScope.managers);
     const themes = themesPromise();
     if(!themes) return;
 
@@ -174,7 +176,7 @@ export default function ChatThemesPicker(props: ChatThemesPickerProps) {
     // slot permanently blank — there is no retry — so wait for the set first. It is cached, so this
     // is free on every build after the first. Hit by the empty-column tip cards, which mount as
     // soon as the IM page does.
-    await rootScope.managers.appStickersManager.getAnimatedEmojiStickerSet();
+    await managers.appStickersManager.getAnimatedEmojiStickerSet();
     if(!middleware()) return;
 
     const defaultThemes = themes.filter((theme) => theme.pFlags.default);
@@ -193,7 +195,7 @@ export default function ChatThemesPicker(props: ChatThemesPickerProps) {
       .filter((themeSettings) => AVAILABLE_BASE_THEMES.has(themeSettings.base_theme._))
       .map((themeSettings) => {
         const shouldBlend = themeSettings.base_theme._ === 'baseThemeTinted' && !isCurated && themeSettings.wallpaper;
-        const wp = shouldBlend ? blendWallpaperForTinted(themeSettings.wallpaper, themeSettings.accent_color) : themeSettings.wallpaper;
+        const wp = shouldBlend ? blendWallpaperForTinted(themeSettings.wallpaper, themeSettings.accent_color) : getCloudThemeWallpaper(theme, themeSettings);
         const result = AppBackgroundTab.addWallPaper(wp, undefined, themeSettings.base_theme._);
         // addWallPaper returns undefined for a pattern wallpaper with no colors —
         // skip rather than deref (matches the tinted-fallback guard below).
@@ -235,7 +237,7 @@ export default function ChatThemesPicker(props: ChatThemesPickerProps) {
           width: size,
           height: size,
           emoji: theme.emoticon,
-          managers: rootScope.managers,
+          managers,
           loadPromises,
           middleware,
           play: false,

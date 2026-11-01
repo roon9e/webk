@@ -22,6 +22,7 @@ import {fastRaf} from '@helpers/schedulers';
 import toHHMMSS from '@helpers/string/toHHMMSS';
 import tsNow from '@helpers/tsNow';
 import {AuthSentCodeType, AuthSignIn} from '@layer';
+import {getFloodWaitTime} from '@appManagers/utils/getFloodWaitTime';
 import I18n, {LangPackKey, i18n} from '@lib/langPack';
 import setBlankToAnchor from '@lib/richTextProcessor/setBlankToAnchor';
 import lottieLoader from '@lib/lottie/lottieLoader';
@@ -93,7 +94,7 @@ function wrapLeftToRight(text: string) {
  * would flash the card.
  */
 export default function AuthCodeCard(props: {spec: Spec}) {
-  const {managers, navigate, toIm} = useAuthFlow();
+  const {managers, navigate, toIm, isLeaving} = useAuthFlow();
 
   /* ---------- state ---------- */
 
@@ -117,6 +118,10 @@ export default function AuthCodeCard(props: {spec: Spec}) {
   let resetEmailTimer: number | undefined;
   let resendTimer: number | undefined;
   let resending = false;
+  // * an answer that comes after the card has gone - dropped, once the sign-in over the app was closed -
+  // * is not taken for a failure: no toast or popup over what is there now, no countdown started again
+  let gone = false;
+  const isGone = () => gone || isLeaving();
 
   /* ---------- header pieces (mutated imperatively in applySentCode) ---------- */
 
@@ -132,7 +137,11 @@ export default function AuthCodeCard(props: {spec: Spec}) {
   editButton.setAttribute('aria-label', I18n.format('Edit', true));
   if(Modes.a11y) editButton.tabIndex = 0;
   editButton.append(Icon('edit'));
-  attachClickEvent(editButton, () => navigate({name: 'signIn'}));
+  attachClickEvent(editButton, () => {
+    // * the code is not going to be typed: the server may stop delivering it (tdesktop, Android)
+    managers.appAccountManager.cancelCode(sentCode.phone_number, sentCode.phone_code_hash);
+    navigate({name: 'signIn'});
+  });
 
   /* ---------- code input (rebuilt when the code changes shape) ---------- */
 
@@ -242,7 +251,7 @@ export default function AuthCodeCard(props: {spec: Spec}) {
       params.phone_code = code;
     }
 
-    managers.apiManager.invokeApi('auth.signIn', params, {ignoreErrors: true}).then(async(response) => {
+    managers.appAccountManager.signIn(params).then(async(response) => {
       switch(response._) {
         case 'auth.authorization':
           await managers.apiManager.setUser(response.user);
@@ -258,7 +267,7 @@ export default function AuthCodeCard(props: {spec: Spec}) {
           });
           break;
       }
-    }).catch((err) => {
+    }).catch((err: ApiError) => {
       let good = false;
       switch(err.type) {
         case 'SESSION_PASSWORD_NEEDED':
@@ -272,9 +281,15 @@ export default function AuthCodeCard(props: {spec: Spec}) {
         case 'PHONE_CODE_INVALID':
           showError(invalidCodeLangKey());
           break;
-        default:
-          markError(err.type);
+        default: {
+          const floodWait = getFloodWaitTime(err);
+          if(floodWait.hasWaitTime) {
+            markError(i18n('Login.Code.TooManyAttempts', [wrapFormattedDuration(formatDuration(floodWait.waitTime))]));
+          } else {
+            markError(err.type);
+          }
           break;
+        }
       }
 
       setSubmitting(false);
@@ -401,10 +416,7 @@ export default function AuthCodeCard(props: {spec: Spec}) {
     stopResendTimer();
     setResendContent(i18n('Login.Code.Resending'));
 
-    managers.apiManager.invokeApi('auth.resendCode', {
-      phone_number: sentCode.phone_number,
-      phone_code_hash: sentCode.phone_code_hash
-    }).then((code) => {
+    managers.appAccountManager.resendCode(sentCode.phone_number, sentCode.phone_code_hash).then((code) => {
       resending = false;
 
       return continueLogin(code, {
@@ -417,6 +429,10 @@ export default function AuthCodeCard(props: {spec: Spec}) {
       });
     }).catch((err: ApiError) => {
       resending = false;
+      if(isGone()) {
+        return;
+      }
+
       console.error('auth.resendCode error:', err);
       toastNew({langPackKey: 'Error.AnError'});
       updateResend();
@@ -426,10 +442,7 @@ export default function AuthCodeCard(props: {spec: Spec}) {
   /* ---------- email reset flow ---------- */
 
   function handleResetEmail() {
-    managers.apiManager.invokeApi('auth.resetLoginEmail', {
-      phone_number: sentCode.phone_number,
-      phone_code_hash: sentCode.phone_code_hash
-    }).then((code) => {
+    managers.appAccountManager.resetLoginEmail(sentCode.phone_number, sentCode.phone_code_hash).then((code) => {
       if(code._ === 'auth.sentCode') {
         const next = withPhoneNumber(code, sentCode.phone_number);
         if(next.type._ === 'auth.sentCodeTypeEmailCode') {
@@ -447,6 +460,10 @@ export default function AuthCodeCard(props: {spec: Spec}) {
         toastNew({langPackKey: 'Error.AnError'});
       }
     }).catch((err: ApiError) => {
+      if(isGone()) {
+        return;
+      }
+
       if(err.type.includes('TASK_ALREADY_EXISTS')) {
         simpleConfirmation({
           titleLangKey: 'Login.ResetEmail.NeedPremium',
@@ -588,6 +605,7 @@ export default function AuthCodeCard(props: {spec: Spec}) {
   });
 
   onCleanup(() => {
+    gone = true;
     cancelFocus?.();
     if(resetEmailTimer) clearTimeout(resetEmailTimer);
     stopResendTimer();

@@ -6,12 +6,14 @@ import {getMiddleware, Middleware, MiddlewareHelper} from '@helpers/middleware';
 import {Reaction} from '@layer';
 import rootScope from '@lib/rootScope';
 import {ButtonMenuItemOptionsVerifiable, ButtonMenuSync} from '@components/buttonMenu';
-import showPremiumPopup from '@components/popups/premium';
 import ChatContextMenu from '@components/chat/contextMenu';
 import {ChatReactionsMenu} from '@components/chat/reactionsMenu';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 import type {ButtonMenuDirection} from '@components/buttonMenuToggle';
 import {getOverlayRoot} from '@helpers/appWindow';
 import {positionMenuTrigger} from '@helpers/positionMenu';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
+import verifyMenuItem from '@helpers/verifyMenuItem';
 
 /**
  * A send button's menu lives in the overlay root like every other menu, placed against the button:
@@ -103,13 +105,14 @@ export default class SendMenu {
     attachContextMenuListener({
       element: this.options.onContextElement,
       callback: async(e) => {
+        const managers = bindManagersToSession(rootScope.managers);
         if(this.options.onOpen && !this.options.onOpen()) {
           return;
         }
 
         cancelEvent(e);
         await Promise.all(buttons.map(async(button) => {
-          const result = await button.verify();
+          const result = await verifyMenuItem(button);
           button.element.classList.toggle('hide', !result);
         }));
 
@@ -120,7 +123,7 @@ export default class SendMenu {
         let reactionsMenu: ChatReactionsMenu;
         if(this.options.withEffects?.()) {
           reactionsMenu = new ChatReactionsMenu({
-            managers: rootScope.managers,
+            managers,
             type: reactionsMenuPosition,
             middleware,
             onFinish: async(reaction) => {
@@ -132,15 +135,14 @@ export default class SendMenu {
 
               const stickerDocId = (reaction as Reaction.reactionCustomEmoji).document_id;
               if(!rootScope.premium && !reactionsMenu.freeCustomEmoji.has(stickerDocId)) {
-                showPremiumPopup({feature: 'premium_stickers'});
+                hotReloadGuard.showPremiumPopup({feature: 'premium_stickers'});
                 return;
               }
 
-              const availableEffects = await rootScope.managers.appReactionsManager.getAvailableEffects();
+              const availableEffects = await managers.appReactionsManager.getAvailableEffects();
               const availableEffect = availableEffects.find((effect) => effect.effect_sticker_id === stickerDocId);
               this.options.onEffect(availableEffect.id);
             },
-            getOpenPosition: (hasMenu) => ChatContextMenu.getReactionsOpenPosition(reactionsMenu, hasMenu),
             isEffects: true
           });
 

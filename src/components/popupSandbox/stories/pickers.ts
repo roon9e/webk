@@ -177,6 +177,22 @@ defineStories('Pickers', [
     }
   },
   {
+    id: 'forward/story',
+    title: 'Share a story',
+    managers: {
+      appStoriesManager: {getStoryLink: () => 'https://t.me/telegram/s/1'}
+    },
+    open: async(ctx) => {
+      const {default: showForwardPopup} = await import('@components/popups/forward');
+      const peerId = ctx.peer('channel');
+      await showForwardPopup(undefined, undefined, undefined, undefined, {
+        peerId,
+        id: 1,
+        canCopyLink: true
+      });
+    }
+  },
+  {
     id: 'shareUrl',
     title: 'Share a link',
     open: async(ctx) => {
@@ -207,3 +223,7 @@ defineStories('Pickers', [
     }
   }
 ]);
+
+// The sandbox reloads on an edit anyway (watchForEdits). Accepting here keeps an edit of a popup this story imports
+// from climbing through the story to the app's root once the sandbox has been opened on the dev server.
+if(import.meta.hot) import.meta.hot.accept();

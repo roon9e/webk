@@ -14,7 +14,6 @@ import Icon from '@components/icon';
 import PeerTitle from '@components/peerTitle';
 import wrapPeerTitle from '@components/wrappers/peerTitle';
 import showPeerPopup from '@components/popups/peer';
-import showPremiumPopup from '@components/popups/premium';
 import {toastNew} from '@components/toast';
 import formatUserPhone from '@components/wrappers/formatUserPhone';
 import {formatFullSentTime} from '@helpers/date';
@@ -26,6 +25,8 @@ import setInnerHTML from '@helpers/dom/setInnerHTML';
 import {AckedResult} from '@lib/superMessagePort';
 import {Accessor, createSignal, For, Show} from 'solid-js';
 import TopbarPlate, {createTopbarPlate, TopbarPlateController} from '@components/chat/topbarPlate';
+import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
+import {hotListen} from '@helpers/hotModule';
 
 type PeerSettingsKey = keyof PeerSettings['pFlags'];
 
@@ -81,6 +82,10 @@ const LANG_KEY_MAP: {[key in ActionKey]?: LangPackKey} = {
  */
 const botPhotoPromptOpenedEmpty = new Map<PeerId, boolean>();
 const botPhotoPromptHidden = new Set<PeerId>();
+hotListen(import.meta.hot, rootScope, 'account_switched', () => {
+  botPhotoPromptOpenedEmpty.clear();
+  botPhotoPromptHidden.clear();
+});
 
 export type ChatActionsPlate = TopbarPlateController & {
   set: (peerId: PeerId, settings: PeerSettings) => () => void,
@@ -146,7 +151,7 @@ function ActionsPlateBody(props: {
 
               const link = document.createElement('a');
               link.append(i18n('BoostingPremium'));
-              attachClickEvent(link, () => showPremiumPopup({feature: 'emoji_status'}));
+              attachClickEvent(link, () => hotReloadGuard.showPremiumPopup({feature: 'emoji_status'}));
 
               const text = i18n('ReportSpamUserEmojiStatusHint', [emoji, link]);
               text.classList.add('pinned-actions-text');

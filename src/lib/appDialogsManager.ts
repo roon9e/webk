@@ -7,10 +7,8 @@ import type {CustomEmojiRendererElement} from '@customEmoji/renderer';
 import PopupElementTsx from '@components/popups/indexTsx';
 import DialogsContextMenu from '@components/dialogsContextMenu';
 import DialogsSelection from '@components/dialogsSelection';
-import {PINNED_DIALOG_CLASS_NAME} from '@components/dialogsPinnedReorder';
 import type {DialogsSelectionBase} from '@components/dialogsSelectionBase';
 import DotRenderer from '@components/dotRenderer';
-import attachDialogFolderTags, {DialogFolderTags, DialogFolderTagsContext} from '@components/folderTags/dialogFolderTags';
 import {setChatListForumOpen, useChatListNarrow, useFolderTagsShown} from '@stores/folderTags';
 import {horizontalMenuObjArgs} from '@components/horizontalMenu';
 import Scrollable from '@components/scrollable';
@@ -19,13 +17,14 @@ import {formatDateAccordingToTodayNew} from '@helpers/date';
 import {IS_MOBILE_SAFARI} from '@environment/userAgent';
 import {logger, LogTypes} from '@lib/logger';
 import rootScope from '@lib/rootScope';
-import appImManager, {AppImManager, APP_TABS} from '@lib/appImManager';
+import appImManager, {AppImManager} from '@lib/appImManager';
+import {APP_TABS} from '@lib/appColumns';
 import Button from '@components/button';
 import SetTransition from '@components/singleTransition';
 import {MyDraftMessage} from '@appManagers/appDraftsManager';
 import {MOUNT_CLASS_TO} from '@config/debug';
 import Modes from '@config/modes';
-import PeerTitle, {changeTitleEmojiColor} from '@components/peerTitle';
+import {changeTitleEmojiColor} from '@components/peerTitle';
 import I18n, {FormatterArguments, i18n, LangPackKey, _i18n} from '@lib/langPack';
 import findUpClassName from '@helpers/dom/findUpClassName';
 import findUpTag from '@helpers/dom/findUpTag';
@@ -36,23 +35,22 @@ import appSidebarLeft from '@components/sidebarLeft';
 import {attachClickEvent, simulateClickEvent} from '@helpers/dom/clickEvent';
 import positionElementByIndex from '@helpers/dom/positionElementByIndex';
 import replaceContent from '@helpers/dom/replaceContent';
-import crossfadeContent, {getCrossfadingTo, STATUS_CROSSFADE_DURATION} from '@helpers/dom/crossfadeContent';
-import highlightText, {TextHighlight} from '@helpers/dom/textHighlight';
+import {getAnimatedOptions} from '@helpers/dom/crossfadeContent';
+import liteMode from '@helpers/liteMode';
+import highlightText from '@helpers/dom/textHighlight';
 import ConnectionStatusComponent from '@components/connectionStatus';
 import {renderImageFromUrlPromise} from '@helpers/dom/renderImageFromUrl';
-import {fastRafPromise} from '@helpers/schedulers';
+import {doubleRaf, fastRafPromise} from '@helpers/schedulers';
 import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
 import handleTabSwipe from '@helpers/dom/handleTabSwipe';
 import {ChatlistContacts, createChatlistContacts} from '@components/sidebarLeft/chatlistContacts';
-import isInDOM from '@helpers/dom/isInDOM';
 import {setSendingStatus} from '@components/sendingStatus';
 import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, NULL_PEER_ID, REAL_FOLDERS} from '@appManagers/constants';
-import groupCallActiveIcon from '@components/groupCallActiveIcon';
 import {ChatlistsChatlistUpdates, DialogFilter, Message, MessageMedia, MessageReplyHeader, Photo} from '@layer';
 import mediaSizes from '@helpers/mediaSizes';
 import appNavigationController, {NavigationItem} from '@components/appNavigationController';
 import appMediaPlaybackController from '@components/appMediaPlaybackController';
-import {AppManagers} from '@lib/managers';
+import {AppManagers, TabManagers} from '@lib/managers';
 import appSidebarRight from '@components/sidebarRight';
 import choosePhotoSize from '@appManagers/utils/photos/choosePhotoSize';
 import renderDialogSubtitleParts from '@components/wrappers/dialogSubtitle';
@@ -64,7 +62,7 @@ import getMediaFromMessage from '@appManagers/utils/messages/getMediaFromMessage
 import getMessageSenderPeerIdOrName from '@appManagers/utils/messages/getMessageSenderPeerIdOrName';
 import wrapStickerEmoji from '@components/wrappers/stickerEmoji';
 import getProxiedManagers from '@lib/getProxiedManagers';
-import deferredPromise, {CancellablePromise} from '@helpers/cancellablePromise';
+import deferredPromise from '@helpers/cancellablePromise';
 import middlewarePromise from '@helpers/middlewarePromise';
 import appDownloadManager from '@lib/appDownloadManager';
 import groupCallsController from '@lib/calls/groupCallsController';
@@ -77,7 +75,6 @@ import apiManagerProxy from '@lib/apiManagerProxy';
 import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
 import {getMiddleware, MiddlewareHelper} from '@helpers/middleware';
 import getDialogMentionBadgeState from '@helpers/dialogMentionBadgeState';
-import {attachRowController, createRowSortableIcon, RowMediaSizeType, type RowTsxController} from '@components/rowTsxController'
 import getMessageThreadId from '@appManagers/utils/messages/getMessageThreadId';
 import formatNumber from '@helpers/number/formatNumber';
 import AppSharedMediaTab from '@components/sidebarRight/tabs/sharedMediaTab';
@@ -91,7 +88,6 @@ import showChatPreviewPopup, {chatPreviewAnchorFromDialogRow} from '@components/
 import showLimitPopup from '@components/popups/limit';
 import StoriesList from '@components/stories/list';
 import {render} from 'solid-js/web';
-import {avatarNew} from '@components/avatarNew';
 import Icon from '@components/icon';
 import {isDialog, isForumTopic, isMonoforumDialog, isSavedDialog} from '@appManagers/utils/dialogs/isDialog';
 import {ChatType} from '@components/chat/chatType';
@@ -104,10 +100,11 @@ import wrapMediaSpoiler from '@components/wrappers/mediaSpoiler';
 import type {MonoforumDialog} from '@lib/storages/monoforumDialogs';
 import {renderPendingSuggestion} from '@components/sidebarLeft/pendingSuggestion';
 import {renderNewAuthorization} from '@components/sidebarLeft/newAuthorization';
+import {renderUnreadOnlyBar} from '@components/sidebarLeft/unreadOnlyBar';
+import useChatListUnreadOnly from '@stores/chatListUnreadOnly';
 import {useHasFolders} from '@stores/foldersSidebar';
 import {useAppState} from '@stores/appState';
 import {BADGE_TRANSITION_TIME} from '@components/autonomousDialogList/constants';
-import {setRollingText} from '@components/animatedCounter';
 import {AutonomousDialogList} from '@components/autonomousDialogList/dialogs';
 import {PossibleDialog, setDialogTyping} from '@components/autonomousDialogList/base';
 import {ForumTab} from '@components/forumTab/forumTab';
@@ -120,7 +117,7 @@ import LazyLoadQueue from '@components/lazyLoadQueue';
 import {fastSmoothScrollToStart} from '@helpers/fastSmoothScroll';
 import ArchiveDialog, {archiveDialogTagName} from '@components/archiveDialog';
 import {createArchiveDialogContextMenu} from '@components/archiveDialogContextMenu';
-import {children, createEffect, createRoot, createUniqueId, on, untrack} from 'solid-js';
+import {children, createEffect, createRoot, createSignal, on, untrack} from 'solid-js';
 import useFolders from '@stores/folders';
 import FoldersTabs from '@components/foldersTabs';
 import clamp from '@helpers/number/clamp';
@@ -133,727 +130,15 @@ import {
   renderChatlistTopNotification,
   type ChatlistTopNotificationController
 } from '@components/sidebarLeft/chatlistTopNotification';
+import {registerHotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
+import {DialogElement, findDialogListElement, setPromiseMiddleware, disposeTextHighlight, setDialogSubtitle, isRenderedSubtitleIntact, getFolderTitleTextColor} from '@components/dialogElement';
+import type {DialogDom, DialogElementOptions} from '@components/dialogElement';
+import createStyleRule from '@helpers/dom/createStyleRule';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
+import {getManagersSession, isSessionLeaving} from '@lib/accounts/getCurrentAccount';
 
-export const DIALOG_LIST_ELEMENT_TAG = 'A';
 // below this many dialogs the sidebar looks empty, so contacts are offered under the chat list
 const MIN_DIALOGS_WITHOUT_CONTACTS = 10;
-
-export function findDialogListElement(target: EventTarget) {
-  return findUpTag(target, DIALOG_LIST_ELEMENT_TAG);
-}
-
-export type DialogDom = {
-  avatarEl: ReturnType<typeof avatarNew>,
-  captionDiv: HTMLElement,
-  titleSpan: HTMLSpanElement,
-  titleSpanContainer: HTMLSpanElement,
-  statusSpan: HTMLSpanElement,
-  lastTimeSpan: HTMLSpanElement,
-  pinnedBadge?: HTMLElement,
-  /** the grip a pinned row is dragged by while its list can be reordered */
-  sortableIcon?: HTMLElement,
-  unreadBadge?: HTMLElement,
-  unreadAvatarBadge?: HTMLElement,
-  callIcon?: ReturnType<typeof groupCallActiveIcon>,
-  mentionsBadge?: HTMLElement,
-  reactionsBadge?: HTMLElement,
-  pollVotesBadge?: HTMLElement,
-  /** opens a bot's main mini app without opening the chat */
-  botAppButton?: HTMLElement,
-  lastMessageSpan: HTMLSpanElement,
-  containerEl: HTMLElement,
-  listEl: HTMLElement,
-  subtitleEl: HTMLElement,
-  mutedIcon?: HTMLElement,
-
-  titleWrapOptions?: WrapSomethingOptions;
-
-  /**
-   * Signature of the last successfully rendered subtitle. Every dialog event
-   * (read, mark unread, notify settings, filter update) runs the whole
-   * `setLastMessage` pipeline, so without it the subtitle is torn down and
-   * rebuilt — custom emoji, media thumbs and all — for updates that cannot
-   * have changed a single character of it.
-   */
-  lastMessageRenderKey?: string,
-  /**
-   * The nodes that signature was rendered as. Plenty of other places
-   * (community dialogs, search results, sidebar pickers) write their own
-   * subtitle into `lastMessageSpan`, so a matching key alone does not mean the
-   * rendered subtitle is still the one in the DOM.
-   */
-  lastMessageRenderParts?: HTMLElement[],
-  /** search-result rows: the query lit up inside the rendered message text */
-  textHighlight?: TextHighlight,
-  /**
-   * The row shows an activity ("typing…", `setDialogTyping`) and the subtitle leaves it alone until
-   * it is over. Not read off `user-typing`: the class only goes when the subtitle is rendered back
-   * in, and that render can be cut short by the next dialog update - which would then see the class
-   * and skip its own render too, leaving the row typing for good.
-   */
-  showsActivity?: boolean,
-
-  setLastMessagePromise?: CancellablePromise<void>,
-  setUnreadMessagePromise?: CancellablePromise<void>
-};
-
-function setPromiseMiddleware<T extends {[smth in K as K]?: CancellablePromise<void>}, K extends keyof T>(obj: T, key: K) {
-  const oldPromise: CancellablePromise<void> = obj[key] as any;
-  oldPromise?.reject();
-
-  // @ts-ignore
-  const deferred = obj[key] = deferredPromise<void>();
-  deferred.catch(() => {}).finally(() => {
-    if((obj[key] as any) === deferred) {
-      delete obj[key];
-    }
-  });
-
-  const middleware = middlewarePromise(() => (obj[key] as any) === deferred);
-  return {deferred, middleware};
-}
-
-function disposeTextHighlight(dom: DialogDom) {
-  dom.textHighlight?.dispose();
-  dom.textHighlight = undefined;
-}
-
-/**
- * Puts the subtitle of a row in - crossfading from the activity it takes the place of, which
- * came in the same way (`setDialogTyping`)
- */
-function setDialogSubtitle(dom: DialogDom, nodes: Node[]) {
-  const {lastMessageSpan} = dom;
-  const wasTyping = lastMessageSpan.classList.contains('user-typing');
-  lastMessageSpan.classList.remove('user-typing');
-  dom.showsActivity = false;
-  crossfadeContent(
-    lastMessageSpan,
-    nodes,
-    wasTyping ? 'crossfade' : 'update',
-    wasTyping ? {duration: STATUS_CROSSFADE_DURATION} : undefined
-  );
-}
-
-/**
- * Whether the subtitle in the DOM is still exactly what `setLastMessage` put
- * there — anyone else writing into `lastMessageSpan` (a community dialog
- * falling back to its chat count, a search result, a sidebar picker) has to
- * invalidate the skip.
- */
-function isRenderedSubtitleIntact(dom: DialogDom) {
-  const parts = dom.lastMessageRenderParts;
-  // * crossfading in, the parts are what it fades to (`setDialogSubtitle`)
-  const childNodes = getCrossfadingTo(dom.lastMessageSpan) ?? dom.lastMessageSpan.childNodes;
-  return !!parts &&
-    parts.length === childNodes.length &&
-    parts.every((part, idx) => part === childNodes[idx]);
-}
-
-function getFolderTitleTextColor(active: boolean) {
-  return active ? 'primary-color' : 'secondary-text-color';
-}
-
-const BADGE_SIZE = 22;
-
-export const DIALOG_AVATAR_SIZES: {[k in DialogElementSize]?: number} = {
-  bigger: 54,
-  abitbigger: 42,
-  small: 32
-};
-
-export type DialogElementSize = RowMediaSizeType;
-export type AsAllChatsType = 'monoforum' | 'topics';
-
-export type DialogElementOptions = {
-  peerId: PeerId,
-  rippleEnabled?: boolean,
-  onlyFirstName?: boolean,
-  meAsSaved?: boolean,
-  avatarSize?: RowMediaSizeType,
-  autonomous?: boolean,
-  loadPromises?: Promise<any>[],
-  fromName?: string,
-  noIcons?: boolean,
-  threadId?: number,
-  monoforumParentPeerId?: PeerId,
-  wrapOptions: WrapSomethingOptions,
-  isMainList?: boolean,
-  withStories?: boolean,
-  controlled?: boolean,
-  dontSetActive?: boolean,
-  asAllChats?: AsAllChatsType,
-  autoDeletePeriod?: number,
-  avatarElement?: HTMLElement,
-  /** the row is in a folder's chat list, and wears the tags of the other folders its chat is in */
-  folderTags?: DialogFolderTagsContext
-};
-
-export type DialogElementBadgeState = {
-  muted: boolean,
-  pinned: boolean,
-  unread: boolean,
-  unreadText?: string,
-  /** the count `unreadText` stands for - tells which way a changed one rolls */
-  unreadCount?: number,
-  unreadMention?: boolean,
-  unreadAvatar: boolean,
-  unreadAvatarText?: string,
-  mentions: boolean,
-  reactions: boolean,
-  pollVotes: boolean,
-  botApp?: boolean,
-  transitionDuration?: number
-};
-
-type DialogElementAppliedBadgeState = {
-  [key in Parameters<DialogElement['toggleBadgeByKey']>[0]]: boolean
-} & {
-  hasOnlyPinnedBadge: boolean,
-  unreadText?: string,
-  unreadCount?: number,
-  unreadMention?: boolean,
-  unreadAvatarText?: string
-};
-
-export interface DialogElement extends RowTsxController {}
-
-export class DialogElement {
-  public dom: DialogDom;
-  public isMainList: boolean;
-  /** what the row last saw of its bot's main mini app - `user_update` redraws it on a change */
-  public hasBotMainApp: boolean;
-  public middlewareHelper: MiddlewareHelper;
-  public folderTags?: DialogFolderTags;
-  private peerTitle: PeerTitle;
-  private lastBadgeState: DialogElementAppliedBadgeState;
-
-  constructor({
-    peerId,
-    rippleEnabled = true,
-    onlyFirstName = false,
-    meAsSaved = true,
-    avatarSize = 'bigger',
-    autonomous,
-    loadPromises,
-    fromName,
-    noIcons,
-    threadId,
-    monoforumParentPeerId,
-    wrapOptions = {},
-    isMainList,
-    withStories,
-    controlled,
-    dontSetActive,
-    asAllChats,
-    autoDeletePeriod,
-    avatarElement,
-    folderTags
-  }: DialogElementOptions) {
-    const wrapMiddleware = wrapOptions?.middleware;
-    this.middlewareHelper = wrapMiddleware ? wrapOptions.middleware.create() : (controlled ? getMiddleware() : undefined);
-
-    attachRowController(this, {
-      clickable: true,
-      noRipple: !rippleEnabled,
-      havePadding: !threadId && asAllChats !== 'topics',
-      title: true,
-      titleRightSecondary: true,
-      subtitle: true,
-      subtitleRight: true,
-      noWrap: true,
-      asLink: true,
-      middleware: this.middlewareHelper?.get()
-    });
-
-    this.isMainList = isMainList;
-    this.subtitleRight.remove();
-
-    const newWrapOptions: WrapSomethingOptions = {
-      ...wrapOptions
-    };
-
-    if(this.middlewareHelper) {
-      newWrapOptions.middleware = this.middlewareHelper.get();
-    }
-
-    const isSavedDialog = !!threadId && peerId === rootScope.myId;
-    const isForumTopic = !!threadId && !isSavedDialog;
-
-    const usePeerId = isSavedDialog ? threadId : peerId;
-
-    const avatar = avatarElement || isForumTopic || asAllChats === 'topics' ?
-      undefined :
-      avatarNew({
-        middleware: this.middlewareHelper.get(),
-        size: DIALOG_AVATAR_SIZES[avatarSize],
-
-        lazyLoadQueue: newWrapOptions.lazyLoadQueue,
-        isDialog: !!meAsSaved,
-        peerId: fromName ? NULL_PEER_ID : usePeerId,
-        peerTitle: fromName,
-        withStories,
-        // Animate video avatars only in the primary chat list (withStories), not
-        // in compact pickers / search rows.
-        withVideoAvatar: withStories,
-        wrapOptions: newWrapOptions,
-        meAsNotes: isSavedDialog,
-        asAllChats: asAllChats === 'monoforum',
-        autoDeletePeriod
-      });
-    loadPromises?.push(avatar?.readyThumbPromise);
-    const avatarEl = avatarElement || avatar?.node;
-    if(avatarEl) {
-      avatarEl.classList.add('dialog-avatar');
-      this.applyMediaElement(avatarEl, avatarSize);
-    }
-
-    const captionDiv = this.container;
-
-    const titleSpanContainer = this.title;
-    titleSpanContainer.classList.add('user-title');
-
-    this.titleRow.classList.add('dialog-title');
-
-    const isActive = !dontSetActive && !autonomous &&
-      appImManager.chat &&
-      appImManager.isSamePeer(appImManager.chat, {
-        peerId: monoforumParentPeerId || peerId,
-        monoforumThreadId: monoforumParentPeerId ? peerId : undefined,
-        threadId: threadId,
-        type: isSavedDialog ? ChatType.Saved : ChatType.Chat
-      });
-
-    const titleWrapOptions: WrapSomethingOptions = {
-      textColor: appDialogsManager.getTextColor(isActive),
-      ...newWrapOptions
-    };
-
-    const peerTitle = this.peerTitle = new PeerTitle();
-    const peerTitlePromise = peerTitle.update({
-      peerId: usePeerId,
-      fromName,
-      dialog: meAsSaved,
-      onlyFirstName,
-      withIcons: !noIcons,
-      threadId: isSavedDialog ? undefined : threadId,
-      wrapOptions: titleWrapOptions,
-      iconsColor: appDialogsManager.getPrimaryColor(isActive),
-      meAsNotes: isSavedDialog,
-      asAllChats
-    });
-
-    loadPromises?.push(peerTitlePromise);
-    titleSpanContainer.append(peerTitle.element);
-
-    // const titleIconsPromise = generateTitleIcons(peerId).then((elements) => {
-    //   titleSpanContainer.append(...elements);
-    // });
-
-    // if(loadPromises) {
-    //   loadPromises.push(titleIconsPromise);
-    // }
-    // }
-
-    const span = this.subtitle;
-    // span.classList.add('user-last-message');
-
-    const li = this.container;
-    li.classList.add('chatlist-chat', 'chatlist-chat-' + avatarSize);
-    if(!autonomous) {
-      (li as HTMLAnchorElement).href = '#' + peerId;
-    }
-    // if(rippleEnabled) {
-    //   ripple(li);
-    // }
-
-    if(avatarSize === 'bigger') {
-      this.container.classList.add('row-big');
-    } else if(avatarSize === 'small') {
-      this.container.classList.add('row-small');
-    }
-
-    li.dataset.peerId = '' + peerId;
-
-    if(threadId) li.dataset.threadId = '' + threadId;
-    if(monoforumParentPeerId) li.dataset.monoforumParentPeerId = '' + monoforumParentPeerId;
-    if(asAllChats) li.dataset.isAllChats = 'true';
-
-    const statusSpan = document.createElement('span');
-    statusSpan.classList.add('message-status', 'sending-status'/* , 'transition', 'reveal' */);
-
-    const lastTimeSpan = document.createElement('span');
-    lastTimeSpan.classList.add('message-time');
-
-    const rightSpan = this.titleRight;
-    rightSpan.classList.add('dialog-title-details');
-    rightSpan.append(statusSpan, lastTimeSpan);
-
-    this.subtitleRow.classList.add('dialog-subtitle', 'has-multiple-badges');
-
-    // if(I18n.isRTL) {
-    //   // this.subtitle.dir = '';
-    //   // this.subtitle.dir = 'rtl';
-    // }
-
-    const dom: DialogDom = this.dom = {
-      avatarEl: avatar,
-      captionDiv,
-      titleSpan: peerTitle.element,
-      titleSpanContainer,
-      statusSpan,
-      lastTimeSpan,
-      lastMessageSpan: span,
-      containerEl: li,
-      listEl: li,
-      subtitleEl: this.subtitleRow,
-      titleWrapOptions
-    };
-
-    if(folderTags && this.middlewareHelper) {
-      this.folderTags = attachDialogFolderTags({
-        listEl: li,
-        after: this.subtitleRow,
-        context: folderTags,
-        middleware: this.middlewareHelper.get()
-      });
-    }
-
-    // this will never happen for migrated legacy chat
-    if(!autonomous) {
-      (li as any).dialogDom = dom;
-
-      if(isMainList && !asAllChats && appDialogsManager.forumTab?.peerId === peerId && !threadId) {
-        li.classList.add('is-forum-open');
-      }
-    }
-
-    if(isActive) {
-      appDialogsManager.setDialogActive(li, true);
-    }
-  }
-
-  public destroy() {
-    this.dispose();
-    this.middlewareHelper?.destroy();
-    disposeTextHighlight(this.dom);
-  }
-
-  public updateTitle(fromName: string) {
-    return this.peerTitle.update({fromName});
-  }
-
-  public remove() {
-    this.destroy();
-    this.dom.listEl.remove();
-  }
-
-  public setMuted(isMuted: boolean, transitionDuration = 0) {
-    const {dom} = this;
-    const wasMuted = dom.listEl.classList.contains('is-muted') &&
-      !dom.listEl.classList.contains('backwards');
-    if(isMuted === wasMuted) {
-      return;
-    }
-
-    if(isMuted && !dom.mutedIcon) {
-      dom.mutedIcon = Icon('nosound_filled', 'dialog-muted-icon');
-      dom.titleSpanContainer.append(dom.mutedIcon);
-    }
-
-    SetTransition({
-      element: dom.listEl,
-      className: 'is-muted',
-      forwards: isMuted,
-      duration: transitionDuration,
-      onTransitionEnd: !isMuted ? (() => {
-        dom.mutedIcon?.remove();
-        delete dom.mutedIcon;
-      }) : undefined
-    });
-  }
-
-  public createPinnedBadge() {
-    if(this.dom.pinnedBadge) return;
-    const badge = this.dom.pinnedBadge = document.createElement('div');
-    badge.className = `dialog-subtitle-badge badge badge-icon badge-${BADGE_SIZE} dialog-subtitle-badge-pinned`;
-    badge.append(Icon('chatspinned'));
-    this.dom.subtitleEl.append(badge);
-  }
-
-  /** The grip a pinned row is dragged by, shown only while its list can be reordered */
-  public createSortableIcon() {
-    if(this.dom.sortableIcon) return;
-    const icon = this.dom.sortableIcon = createRowSortableIcon();
-    this.dom.listEl.append(icon);
-  }
-
-  public createUnreadBadge() {
-    if(this.dom.unreadBadge) return;
-    const badge = this.dom.unreadBadge = document.createElement('div');
-    badge.className = `dialog-subtitle-badge badge badge-${BADGE_SIZE} dialog-subtitle-badge-unread`;
-    this.dom.subtitleEl.append(badge);
-  }
-
-  public createUnreadAvatarBadge() {
-    if(this.dom.unreadAvatarBadge) return;
-    const badge = this.dom.unreadAvatarBadge = document.createElement('div');
-    badge.className = `dialog-subtitle-badge badge badge-${BADGE_SIZE} avatar-badge`;
-    this.dom.listEl.append(badge);
-  }
-
-  public createMentionsBadge() {
-    if(this.dom.mentionsBadge) return;
-    const badge = this.dom.mentionsBadge = document.createElement('div');
-    badge.className = `dialog-subtitle-badge badge badge-${BADGE_SIZE} mention mention-badge dialog-subtitle-badge-mention`;
-    badge.innerText = '@';
-    this.dom.subtitleEl.append(badge);
-  }
-
-  public createReactionsBadge() {
-    if(this.dom.reactionsBadge) return;
-    const badge = this.dom.reactionsBadge = document.createElement('div');
-    badge.className = `dialog-subtitle-badge badge badge-${BADGE_SIZE} reaction-badge dialog-subtitle-badge-reaction`;
-    badge.append(Icon('reactions_filled'));
-    this.dom.subtitleEl.append(badge);
-  }
-
-  public createPollVotesBadge() {
-    if(this.dom.pollVotesBadge) return;
-    const badge = this.dom.pollVotesBadge = document.createElement('div');
-    badge.className = `dialog-subtitle-badge badge badge-${BADGE_SIZE} poll-vote-badge dialog-subtitle-badge-pollvote`;
-    badge.append(Icon('poll'));
-    this.dom.subtitleEl.append(badge);
-  }
-
-  public createBotAppButton() {
-    if(this.dom.botAppButton) return;
-    const button = this.dom.botAppButton = Button(
-      `dialog-subtitle-badge badge badge-${BADGE_SIZE} btn-color-primary dialog-subtitle-badge-bot-app`,
-      {text: 'Open', noRipple: true, asDiv: !Modes.a11y}
-    );
-    // * every such button says "Open" - it is the bot's name that tells them apart
-    const {titleSpan} = this.dom;
-    titleSpan.id ||= createUniqueId();
-    button.setAttribute('aria-describedby', titleSpan.id);
-    // * the list opens the chat on a press anywhere in the row (setListClickListener), but not on this
-    button.dataset.dialogListAction = 'true';
-    button.addEventListener('click', (e) => {
-      cancelEvent(e); // * the row is a link
-      const peerId = this.dom.listEl.dataset.peerId.toPeerId();
-      // * turning the confirmation down rejects, and leaves nothing to do
-      appImManager.openWebApp({botId: peerId.toUserId(), main: true, peerId}).catch(noop);
-    });
-    this.dom.subtitleEl.append(button);
-  }
-
-  public setBadgeState(options: DialogElementBadgeState) {
-    const transitionDuration = options.transitionDuration || 0;
-    this.setMuted(options.muted, transitionDuration);
-
-    const previous = this.lastBadgeState;
-    const botApp = !!options.botApp;
-    // * the bot's button takes the pin's place instead of covering it, as the unread badge does
-    const pinned = options.pinned && !botApp;
-
-    // * `toggleBadgeByKey` writes what it toggles into the very state `previous` is
-    const wasVisible = {
-      unreadBadge: !!previous?.unreadBadge,
-      unreadAvatarBadge: !!previous?.unreadAvatarBadge
-    };
-
-    const mounted = {
-      pinnedBadge: !!this.dom.pinnedBadge,
-      unreadBadge: !!this.dom.unreadBadge,
-      unreadAvatarBadge: !!this.dom.unreadAvatarBadge,
-      mentionsBadge: !!this.dom.mentionsBadge,
-      reactionsBadge: !!this.dom.reactionsBadge,
-      pollVotesBadge: !!this.dom.pollVotesBadge,
-      botAppButton: !!this.dom.botAppButton
-    };
-
-    const states: Array<[
-      Parameters<DialogElement['toggleBadgeByKey']>[0],
-      boolean
-    ]> = [
-      ['pinnedBadge', pinned],
-      ['unreadBadge', options.unread],
-      ['unreadAvatarBadge', options.unreadAvatar],
-      ['mentionsBadge', options.mentions],
-      ['reactionsBadge', options.reactions],
-      ['pollVotesBadge', options.pollVotes],
-      ['botAppButton', botApp]
-    ];
-
-    // * the bot's button and the badges of the subtitle take turns in one place, so whatever
-    // * leaves it to the other leaves from where it stands - measured before the newcomer is
-    // * appended and pushes it aside
-    if(transitionDuration && previous && previous.botAppButton !== botApp) {
-      this.holdBadgesInPlace(states
-      .filter(([key, visible]) => key !== 'unreadAvatarBadge' && !visible && previous[key] && this.dom[key])
-      .map(([key]) => this.dom[key]));
-    }
-
-    // * the pinned rows of a list form the block that can be reordered within itself, and
-    // * `Sortable` reads that block off the DOM - see attachPinnedDialogsReorder
-    this.dom.listEl.classList.toggle(PINNED_DIALOG_CLASS_NAME, !!options.pinned);
-
-    if(options.pinned) this.createSortableIcon();
-    if(pinned) this.createPinnedBadge();
-    if(options.unread) this.createUnreadBadge();
-    if(options.unreadAvatar) this.createUnreadAvatarBadge();
-    if(options.mentions) this.createMentionsBadge();
-    if(options.reactions) this.createReactionsBadge();
-    if(options.pollVotes) this.createPollVotesBadge();
-    if(botApp) this.createBotAppButton();
-
-    const subtitleBadgesLength = [
-      pinned,
-      options.unread,
-      options.mentions,
-      options.reactions,
-      options.pollVotes,
-      botApp
-    ].filter(Boolean).length;
-    const hasOnlyPinnedBadge = pinned && subtitleBadgesLength === 1;
-    // * `SetTransition` keeps `animating` on the element for the whole duration,
-    // * and `.has-only-pinned-badge:not(.animating)` drops the subtitle's trailing
-    // * margin while it is there. Replaying it for an unchanged state makes the
-    // * subtitle of every pinned row widen and snap back — a visible blink.
-    if(!previous || previous.hasOnlyPinnedBadge !== hasOnlyPinnedBadge) {
-      SetTransition({
-        element: this.subtitleRow,
-        className: 'has-only-pinned-badge',
-        forwards: hasOnlyPinnedBadge,
-        duration: transitionDuration
-      });
-    }
-
-    for(const [key, visible] of states) {
-      if(!this.dom[key]) {
-        continue;
-      }
-
-      // an already mounted badge that keeps its visibility needs no transition
-      if(mounted[key] && previous?.[key] === visible) {
-        continue;
-      }
-
-      this.toggleBadgeByKey(key, visible, mounted[key], !transitionDuration);
-    }
-
-    // * a count that changes on a badge already in sight rolls to the new one, character by
-    // * character, as it does in the official apps; one that comes in with its badge does not,
-    // * nor does the `@` of a mention, whose badge is cut differently (`.mention`) and would
-    // * swell on its way to a number
-    const unreadDirection = (options.unreadCount ?? 0) - (previous?.unreadCount ?? 0);
-    const rollUnread = !!transitionDuration && !!previous && !previous.unreadMention === !options.unreadMention;
-    const setUnreadText = (key: 'unreadBadge' | 'unreadAvatarBadge', text: string) => {
-      setRollingText({
-        element: this.dom[key],
-        text,
-        direction: unreadDirection,
-        animate: rollUnread && mounted[key] && wasVisible[key]
-      });
-    };
-
-    if(options.unread && this.dom.unreadBadge) {
-      if(options.unreadText !== undefined && options.unreadText !== previous?.unreadText) {
-        setUnreadText('unreadBadge', options.unreadText);
-        if(this.dom.unreadAvatarBadge) {
-          setUnreadText('unreadAvatarBadge', options.unreadText);
-        }
-      }
-      this.dom.unreadBadge.classList.add('unread');
-      this.dom.unreadBadge.classList.toggle('mention', !!options.unreadMention);
-    }
-
-    if(options.unreadAvatar && this.dom.unreadAvatarBadge) {
-      if(options.unreadAvatarText !== undefined && options.unreadAvatarText !== previous?.unreadAvatarText) {
-        setUnreadText('unreadAvatarBadge', options.unreadAvatarText);
-      }
-      this.dom.unreadAvatarBadge.classList.add('unread');
-      this.dom.unreadAvatarBadge.classList.toggle('mention', !!options.unreadMention);
-    }
-
-    this.lastBadgeState = {
-      pinnedBadge: pinned,
-      unreadBadge: options.unread,
-      unreadAvatarBadge: options.unreadAvatar,
-      mentionsBadge: options.mentions,
-      reactionsBadge: options.reactions,
-      pollVotesBadge: options.pollVotes,
-      botAppButton: botApp,
-      hasOnlyPinnedBadge,
-      unreadText: options.unreadText,
-      unreadCount: options.unreadCount,
-      unreadMention: options.unreadMention,
-      unreadAvatarText: options.unreadAvatarText
-    };
-  }
-
-  /** what the unread badge says - its DOM holds the plain text only while the count stands still */
-  public get unreadText() {
-    return this.lastBadgeState?.unreadText;
-  }
-
-  /**
-   * Lifts the leaving badges out of the subtitle's flow, each where it stands: the one coming
-   * in their place does not push them aside, and their going leaves no gap to snap shut
-   */
-  private holdBadgesInPlace(badges: HTMLElement[]) {
-    const row = this.subtitleRow;
-    if(!badges.length || !row.isConnected) {
-      return;
-    }
-
-    // * all measured before any is lifted, as lifting one moves the rest
-    const isRTL = I18n.getIsRTL();
-    const width = row.clientWidth;
-    const places = badges.map((badge) => ({
-      badge,
-      top: badge.offsetTop,
-      inlineEnd: isRTL ? badge.offsetLeft : width - badge.offsetLeft - badge.offsetWidth
-    }));
-
-    for(const {badge, top, inlineEnd} of places) {
-      badge.style.setProperty('--held-top', top + 'px');
-      badge.style.setProperty('--held-inline-end', inlineEnd + 'px');
-      badge.classList.add('is-held-in-place');
-    }
-  }
-
-  public toggleBadgeByKey(
-    key: Extract<keyof DialogDom, 'unreadBadge' | 'unreadAvatarBadge' | 'mentionsBadge' | 'reactionsBadge' | 'pollVotesBadge' | 'pinnedBadge' | 'botAppButton'>,
-    hasBadge: boolean,
-    justCreated: boolean,
-    batch?: boolean
-  ) {
-    // * `setBadgeState` skips a badge whose visibility `lastBadgeState` says is unchanged, so
-    // * out-of-band toggles (`toggleAvatarUnreadBadges` on sidebar collapse / forum tab) must
-    // * keep it in sync — otherwise reading the last unread topic can't hide the avatar badge
-    if(this.lastBadgeState) {
-      this.lastBadgeState[key] = hasBadge;
-    }
-
-    // * called back before it was gone
-    if(hasBadge) {
-      this.dom[key].classList.remove('is-held-in-place');
-    }
-
-    SetTransition({
-      element: this.dom[key],
-      className: 'is-visible',
-      forwards: hasBadge,
-      duration: batch ? 0 : BADGE_TRANSITION_TIME,
-      onTransitionEnd: hasBadge ? undefined : () => {
-        this.dom[key].remove();
-        delete this.dom[key];
-      },
-      useRafs: !justCreated || !isInDOM(this.dom[key]) ? 2 : 0
-    });
-  }
-}
 
 // const testScroll = false;
 // let testTopSlice = 1;
@@ -951,7 +236,7 @@ export class AppDialogsManager {
 
   private filtersNavigationItem: NavigationItem;
 
-  private managers: AppManagers;
+  private managers: TabManagers;
 
   public doNotRenderChatList: boolean;
   public isFirstDialogsLoad: boolean;
@@ -966,6 +251,15 @@ export class AppDialogsManager {
 
   public xd: AutonomousDialogList;
   public xds: {[filterId: number]: AutonomousDialogList} = {};
+  // * the fades the open list is built again behind (`refillListFaded`), and which change of the
+  // * mode they are of
+  private listRefillAnimations: Animation[] = [];
+  private listRefillGeneration = 0;
+  // * the bar over the list follows the rows it tells about, which change behind a fade - not the mode
+  private unreadOnlyBarShown = createSignal(false);
+  private unreadOnlyBarContainer: HTMLElement;
+  // * what the list fades through while it is built again (`refillListFaded`)
+  private listCover: HTMLElement;
 
   public cancelChatlistUpdatesFetching: () => void;
   public fetchChatlistUpdates: () => void;
@@ -1003,11 +297,17 @@ export class AppDialogsManager {
     this.foldersOverlay.classList.add('chatlist-overlay');
     bottomPart.prepend(this.foldersOverlay);
 
-    // Surface the overlay's live height to the parent so the chatlist below can leave matching
-    // top padding — .folders-scrollable reads var(--chatlist-overlay-height) for its padding-top.
+    this.listCover = document.createElement('div');
+    this.listCover.classList.add('chatlist-cover');
+
+    // Surface the overlay's live height so the chatlist below can leave matching top padding —
+    // .folders-scrollable reads var(--chatlist-overlay-height) for its padding-top. Given to the
+    // scrollables alone: set on the container, it restyled the whole chat list on every frame a
+    // plate in the overlay grew or shrank (createStyleRule)
+    const overlayHeightRule = createStyleRule(bottomPart, '#folders-container .folders-scrollable');
     new ResizeObserver((entries) => {
       const height = entries[0].borderBoxSize?.[0]?.blockSize ?? entries[0].contentRect.height;
-      bottomPart.style.setProperty('--chatlist-overlay-height', height + 'px');
+      overlayHeightRule.set('--chatlist-overlay-height', height + 'px');
     }).observe(this.foldersOverlay);
 
     const storiesListContainer = this.storiesListContainer = document.createElement('div');
@@ -1045,6 +345,7 @@ export class AppDialogsManager {
     });
 
     rootScope.addEventListener('state_cleared', () => {
+      this.setUnreadOnly(false);
       const clearCurrent = REAL_FOLDERS.has(this.filterId);
       this.xd.loadedDialogsAtLeastOnce = false;
       this.isFirstDialogsLoad = true;
@@ -1092,6 +393,14 @@ export class AppDialogsManager {
       this.foldersOverlay.append(...resolvedChildren as any);
     });
 
+    // * under the folder tabs, the last thing over the list
+    const unreadOnlyBarContainer = this.unreadOnlyBarContainer = document.createElement('div');
+    this.foldersOverlay.append(unreadOnlyBarContainer);
+    renderUnreadOnlyBar(unreadOnlyBarContainer, {
+      shown: this.unreadOnlyBarShown[0],
+      onShowAll: () => this.showAllChatsFrom(unreadOnlyBarContainer)
+    });
+
     const [appState] = useAppState();
     const [appSettings, setAppSettings] = useAppSettings();
     // * it should've had a better place :(
@@ -1134,34 +443,98 @@ export class AppDialogsManager {
     this.onStateLoaded(appState);
   }
 
-  private onRef(scrollableContext: ScrollableContextValue) {
-    this.setFilterId(FOLDER_ID_ALL);
+  /**
+   * The tab is about to move to another account: the lists of this one go - every folder but All,
+   * whose list is emptied - with the forum tabs, the stories and the selection made in them.
+   * The navigation entries they pushed are dropped by the switch with the rest of the stack.
+   */
+  public closeForAccountSwitch() {
+    this.stateMiddlewareHelper.clean();
+    this.selection.cancelSelection();
+    this.cancelChatlistUpdatesFetching?.();
+    this.cancelChatlistUpdatesFetching =
+      this.fetchChatlistUpdates =
+      undefined;
+
+    this.forumsTabs.forEach((forumTab) => forumTab.onCloseAfterTimeout());
+    this.forumsTabs.clear();
+    this.forumTabByPeerIdPromises.clear();
+    if(this.forumTab) {
+      this.forumTab = undefined;
+      appSidebarLeft.sidebarEl.classList.remove('is-forum-visible');
+      this.onSomeDrawerToggle?.();
+      this.onChatListNarrowChange();
+    }
+
+    this.forumNavigationItem =
+      this.filtersNavigationItem =
+      undefined;
+
+    this.disposeStories?.();
+    this.disposeStories =
+      this.resizeStoriesList =
+      undefined;
+
+    this.contactsPlaceholder && this.removeContactsPlaceholder();
+    this.updateContactsLengthPromise = undefined;
+    this.lastActiveElements.clear();
+
+    for(const id in this.filtersRendered) {
+      +id !== FOLDER_ID_ALL && this.destroyFilter(+id);
+    }
+
+    // * the folders sidebar lists them too: at once, with their lists
+    useFolders().resetForAccountSwitch();
+    this.filterId = FOLDER_ID_ALL;
+    this.xd = this.xds[FOLDER_ID_ALL];
+    this.xd.clear();
+  }
+
+  // * the counterpart of closeForAccountSwitch, once the tab is on the new account
+  public openAfterAccountSwitch() {
+    // * All is made anew rather than refilled: its list keeps more of the account than its rows - the
+    // * archive above them, the communities projected into it - and fetches it as it is made
+    this.destroyFilter(FOLDER_ID_ALL);
+    this.addAllChatsFilter();
+    this.xd = this.xds[FOLDER_ID_ALL];
+
+    appSidebarLeft.onCollapsedChange();
+    // * a new list is loaded the way the first one was: once, by picking its folder
+    this.isFirstDialogsLoad = true;
+    this.showFiltersPromise = undefined;
+    this.onStateLoaded(useAppState()[0]);
+    // * an account without folders adds none, and nothing else would hide the previous one's tabs
+    this.onFiltersLengthChange();
+  }
+
+  private addAllChatsFilter() {
     this.addFilter({
       id: FOLDER_ID_ALL,
       title: {_: 'textWithEntities', text: '', entities: []},
       localId: FOLDER_ID_ALL
     });
+  }
+
+  private destroyFilter(filterId: number) {
+    const elements = this.filtersRendered[filterId];
+    elements.topNotification?.dispose();
+    elements.container.remove();
+
+    this.xds[filterId].destroy();
+    delete this.xds[filterId];
+    delete this.filtersRendered[filterId];
+  }
+
+  private onRef(scrollableContext: ScrollableContextValue) {
+    this.setFilterId(FOLDER_ID_ALL);
+    this.addAllChatsFilter();
 
     const {setSelectedFolderId, onClick, setOnClick, folderItems} = useFolders();
     const selectFolderByIndex = async(index: number) => {
       const id = folderItems[index]?.filter.id ?? FOLDER_ID_ALL;
       const wasFilterId = this.filterId;
 
-      const available = wasFilterId === -1 ||
-        REAL_FOLDERS.has(id) ||
-        (await rootScope.managers.filtersStorage.isFilterIdAvailable(id) ?? true);
-      if(!available) {
-        showLimitPopup('folders');
-        return false;
-      }
-
-      // Switching folders clears whatever is open in the left sidebar — an open
-      // global search and any stacked tabs — mirroring how opening a left-sidebar
-      // tab does it (closeEverythingInside). Both folder UIs (horizontal tabs and
-      // the vertical folders sidebar) funnel through here. Tabs are closed the
-      // natural way (as if via the back arrow), so a tab that needs confirmation
-      // still asks; if the user declines, cancel the folder switch entirely.
-      if(!await appSidebarLeft.closeEverythingInsideNaturally()) {
+      if(!await this.canOpenFolder(id)) {
         return false;
       }
 
@@ -1221,12 +594,211 @@ export class AppDialogsManager {
 
     createFolderContextMenu({
       appSidebarLeft,
+      appDialogsManager: this,
       AppChatFoldersTab,
       AppEditFolderTab,
       managers: this.managers,
       className: 'menu-horizontal-div-item',
       listenTo: this.folders.menu
     });
+  }
+
+  /**
+   * Shows only unread chats, or every chat again - of the open folder, or of `filterId`, which is
+   * then opened. A chat read while only unread ones are shown stays until the list is built again
+   */
+  public async setUnreadOnly(value: boolean, filterId = this.filterId) {
+    const [unreadOnly, setUnreadOnly] = useChatListUnreadOnly();
+    if(unreadOnly() === value && filterId === this.filterId) {
+      return;
+    }
+
+    // * nothing changes for a folder that cannot be opened. Opening one closes what is open in the
+    // * left sidebar first, and the archive closed gives the list back to the folder it was opened
+    // * from - which may be this very one, so whether a folder is opened is asked again after
+    if(filterId !== this.filterId && !await this.canOpenFolder(filterId)) {
+      return;
+    }
+
+    const opensFolder = filterId !== this.filterId;
+    if(unreadOnly() === value && !opensFolder) {
+      return;
+    }
+
+    const generation = ++this.listRefillGeneration;
+    setUnreadOnly(value);
+    // * the selection belongs to the list as it was when it was made, and the list is built again:
+    // * a chat it holds may be out of sight now, and still acted on
+    this.selection.cancelSelection();
+
+    // * a list that is not on screen is built again when it is opened. The archive is never filtered
+    for(const id in this.xds) {
+      if(+id !== FOLDER_ID_ARCHIVE && this.xds[id] !== this.xd) {
+        this.xds[id].clear();
+      }
+    }
+
+    if(!opensFolder && this.filterId !== FOLDER_ID_ARCHIVE) {
+      void this.refillListFaded(this.xd, value, generation);
+      return;
+    }
+
+    if(opensFolder) {
+      // * the list leaving for the folder keeps its place under the bar that comes, until it is
+      // * opened again (`onTabChange`)
+      const leaving = this.xd.scrollable.container;
+      leaving.style.paddingTop = getComputedStyle(leaving).paddingTop;
+      const {folderItems, onClick} = useFolders();
+      onClick()(folderItems.findIndex((item) => item.id === filterId));
+    }
+
+    // * the bar comes in place, over the list that slides away; a refill cut short ends here
+    const [isBarShown, setBarShown] = this.unreadOnlyBarShown;
+    const barComes = value && !isBarShown() && liteMode.isAvailable('animations');
+    setBarShown(value);
+    this.endListRefill();
+    if(barComes) {
+      this.fadeForRefill([[this.unreadOnlyBarContainer, 1]], 200);
+    }
+  }
+
+  /**
+   * Whether the folder can be opened - it may be over the limit, and whatever is open in the left
+   * sidebar (a global search, stacked tabs) is closed first, the natural way: a tab that needs
+   * confirmation still asks, and declined, the folder stays closed
+   */
+  private async canOpenFolder(filterId: number) {
+    const available = this.filterId === -1 ||
+      REAL_FOLDERS.has(filterId) ||
+      (await rootScope.managers.filtersStorage.isFilterIdAvailable(filterId) ?? true);
+    if(!available) {
+      showLimitPopup('folders');
+      return false;
+    }
+
+    return appSidebarLeft.closeEverythingInsideNaturally();
+  }
+
+  /**
+   * Builds the open list again behind a fade through: what it showed fades out, and what it shows
+   * now fades in as soon as its first page is there. It fades through the column's colour laid
+   * over the rows (`.chatlist-cover`), not the rows' own opacity: an opacity animation on the
+   * list makes the browser lift all of it into a layer of its own first, and a long list started
+   * its fade late and then jumped. The bar over the list changes in between, at its full height,
+   * so the rows are never seen moving down or up for it. A first page that takes its time (every
+   * dialog is still being loaded) brings the skeleton of a loading list in
+   */
+  private async refillListFaded(xd: AutonomousDialogList, unreadOnly: boolean, generation: number) {
+    const [isBarShown, setBarShown] = this.unreadOnlyBarShown;
+    const bar = this.unreadOnlyBarContainer;
+    const cover = this.listCover;
+    if(!liteMode.isAvailable('animations')) {
+      this.endListRefill();
+      setBarShown(unreadOnly);
+      await this.rebuildList(xd, generation);
+      return;
+    }
+
+    if(!cover.isConnected) {
+      this.bottomPart.append(cover);
+    }
+
+    // * the bar leaves with the rows it tells about; staying, it is brought back from a fade cut short
+    const fadingOut = this.fadeForRefill(isBarShown() ? [[cover, 1], [bar, unreadOnly ? 1 : 0]] : [[cover, 1]], 150);
+    try {
+      await Promise.all(fadingOut.map((animation) => animation.finished));
+    } catch{ // * cancelled by the next one
+      return;
+    }
+
+    // * a bar that comes is held unseen while the rows load, to fade in with them
+    if(unreadOnly && !isBarShown()) {
+      this.fadeForRefill([[cover, 1], [bar, 0]], 0);
+    }
+
+    setBarShown(unreadOnly);
+    // * another folder was opened meanwhile - in the mode already, and this list has left
+    if(this.xd !== xd) {
+      this.endListRefill();
+      return;
+    }
+
+    await this.rebuildList(xd, generation);
+    if(generation !== this.listRefillGeneration) {
+      return;
+    }
+
+    // * the new rows are painted first: a fade started under their rendering is seen half done
+    await doubleRaf();
+    if(generation !== this.listRefillGeneration) {
+      return;
+    }
+
+    const fadingIn = this.fadeForRefill(unreadOnly ? [[cover, 0], [bar, 1]] : [[cover, 0]], 200);
+    try {
+      await Promise.all(fadingIn.map((animation) => animation.finished));
+    } catch{
+      return;
+    }
+
+    if(generation === this.listRefillGeneration) {
+      this.endListRefill();
+    }
+  }
+
+  /**
+   * Builds the list again, and waits for its first page - or, when that takes its time (every
+   * dialog is still being loaded), brings the skeleton of a loading list in and waits no more
+   */
+  private async rebuildList(xd: AutonomousDialogList, generation: number) {
+    let isLoaded = false;
+    const loading = xd.fullReset()?.then(() => isLoaded = true, () => isLoaded = true);
+    const isSlow = await Promise.race([
+      loading?.then(() => false),
+      pause(200).then(() => true)
+    ]);
+
+    // * the loading lets go of the skeleton when it ends, so it is never left over the list
+    if(isSlow && !isLoaded && generation === this.listRefillGeneration) {
+      xd.loadedDialogsAtLeastOnce = false;
+      xd.checkForDialogsPlaceholder();
+    }
+  }
+
+  // * nothing held by a refill any more: the cover goes, and the bar is at its own opacity
+  private endListRefill() {
+    this.listCover.remove();
+    this.fadeForRefill([], 0);
+  }
+
+  /**
+   * Fades each element to its opacity - from where a fade cut short has left it, or else from the
+   * other end - and ends the fades that are not asked for any more. A fade to nothing holds at its
+   * end: the cover and the bar rest at full opacity
+   */
+  private fadeForRefill(targets: [HTMLElement, number][], duration: number) {
+    const fading = new Set(this.listRefillAnimations.map((animation) => (animation.effect as KeyframeEffect).target));
+    const from = targets.map(([element, to]) => fading.has(element) ? +getComputedStyle(element).opacity : 1 - to);
+    this.listRefillAnimations.forEach((animation) => animation.cancel());
+    return this.listRefillAnimations = targets.map(([element, to], idx) => element.animate(
+      [{opacity: from[idx]}, {opacity: to}],
+      {...getAnimatedOptions(duration), fill: to ? 'none' : 'forwards'}
+    ));
+  }
+
+  /**
+   * Every chat again, from a control that leaves with the unread ones: the focus it had goes to
+   * the open folder, in whichever of the two places folders are, or else to the list
+   */
+  private showAllChatsFrom(control: HTMLElement) {
+    const hadFocus = Modes.a11y && control.contains(document.activeElement);
+    this.setUnreadOnly(false);
+    if(!hadFocus) {
+      return;
+    }
+
+    const folders = document.querySelectorAll<HTMLElement>('#folders-tabs .menu-horizontal-div-item.active, .folders-sidebar__folder-item--selected');
+    (Array.from(folders).find((element) => element.offsetParent) || this.xd.scrollable.container).focus();
   }
 
   private _renderStories() {
@@ -1424,16 +996,9 @@ export class AppDialogsManager {
     });
 
     rootScope.addEventListener('filter_delete', (filter) => {
-      const elements = this.filtersRendered[filter.id];
-      if(!elements) return;
+      if(!this.filtersRendered[filter.id]) return;
 
-      elements.topNotification?.dispose();
-      elements.container.remove();
-
-      this.xds[filter.id].destroy();
-      delete this.xds[filter.id];
-      delete this.filtersRendered[filter.id];
-
+      this.destroyFilter(filter.id);
       this.onFiltersLengthChange();
     });
 
@@ -1485,11 +1050,10 @@ export class AppDialogsManager {
     changeTitleEmojiColor(listEl, this.getPrimaryColor(active));
 
     // the subtitle's text spoilers are painted on a canvas — CSS can't recolor them
-    DotRenderer.setInlineSpoilersTextColor(listEl, this.getTextColor(active));
+    DotRenderer.setInlineSpoilersTextColor(listEl, active ? '#ffffff' : this.getTextColor(active));
   }
 
   public setDialogActive(listEl: HTMLElement, active: boolean) {
-    const dom = (listEl as any).dialogDom as DialogDom;
     this.setDialogActiveStatus(listEl, active);
     listEl.classList.toggle(
       'is-forum-open',
@@ -1501,13 +1065,10 @@ export class AppDialogsManager {
     } else {
       this.lastActiveElements.delete(listEl);
     }
-
-    if(dom?.callIcon) {
-      dom.callIcon.setActive(active);
-    }
   }
 
   private async onStateLoaded(state: State) {
+    const managers = bindManagersToSession(this.managers);
     this.stateMiddlewareHelper.clean();
     const middleware = this.stateMiddlewareHelper.get();
     const filtersArr = state.filtersArr;
@@ -1534,7 +1095,7 @@ export class AppDialogsManager {
     if(haveFilters) {
       await addFilters(filtersArr);
     } else {
-      addFiltersPromise = this.managers.filtersStorage.getDialogFilters().then(addFilters);
+      addFiltersPromise = managers.filtersStorage.getDialogFilters().then(addFilters);
     }
 
     this.doNotRenderChatList = true;
@@ -1567,10 +1128,10 @@ export class AppDialogsManager {
 
     haveFilters && this.showFiltersPromise && await wrapPromiseWithMiddleware(this.showFiltersPromise);
 
-    this.managers.appNotificationsManager.getNotifyPeerTypeSettings();
+    managers.appNotificationsManager.getNotifyPeerTypeSettings();
 
     // await (await m(loadDialogsPromise)).renderPromise.catch(noop);
-    this.managers.appMessagesManager.fillConversations();
+    managers.appMessagesManager.fillConversations();
 
     if(!this.suggestionContainer) {
       this.suggestionContainer = document.createElement('div');
@@ -1589,6 +1150,8 @@ export class AppDialogsManager {
     const {filterId} = this;
     this.xd = this.xds[filterId];
     this.xd.reset();
+    // * held where it was while it left under a bar that came (`setUnreadOnly`)
+    this.xd.scrollable.container.style.paddingTop = '';
 
     this.cancelChatlistUpdatesFetching?.();
     this.cancelChatlistUpdatesFetching = undefined;
@@ -1848,23 +1411,26 @@ export class AppDialogsManager {
     // const needPlaceholder = this.xd.scrollable.loadedAll.bottom && !chatList.childElementCount || true;
     const needPlaceholder = !this.xd.sortedList.itemsLength();
     // chatList.style.display = 'none';
+    const type: 'dialogs' | 'folder' | 'unread' = useChatListUnreadOnly()[0]() ?
+      'unread' :
+      this.filterId ? 'folder' : 'dialogs';
 
-    if(needPlaceholder && placeholderContainer) {
-      return;
-    } else if(!needPlaceholder) {
-      if(placeholderContainer) {
-        part.classList.remove('with-placeholder');
-        placeholderContainer.remove();
-      }
+    // * the list may have switched between every chat and unread ones under its placeholder
+    if(placeholderContainer && (!needPlaceholder || part.dataset.placeholderType !== type)) {
+      part.classList.remove('with-placeholder');
+      placeholderContainer.remove();
+      placeholderContainer = undefined;
+    }
 
+    if(!needPlaceholder || placeholderContainer) {
       return;
     }
 
-    let placeholder: ReturnType<AppDialogsManager['generateEmptyPlaceholder']>, type: 'dialogs' | 'folder';
-    if(!this.filterId) {
+    let placeholder: ReturnType<AppDialogsManager['generateEmptyPlaceholder']>;
+    if(type === 'dialogs') {
       placeholder = this.generateEmptyPlaceholder({
         title: 'ChatList.Main.EmptyPlaceholder.Title',
-        classNameType: type = 'dialogs'
+        classNameType: type
       });
 
       placeholderContainer = placeholder.container;
@@ -1887,10 +1453,12 @@ export class AppDialogsManager {
 
       placeholderContainer.prepend(img);
     } else {
+      // * no unread chats looks exactly like an empty folder: only what it says and its button differ
+      const isUnread = type === 'unread';
       placeholder = this.generateEmptyPlaceholder({
-        title: 'FilterNoChatsToDisplay',
-        subtitle: 'FilterNoChatsToDisplayInfo',
-        classNameType: type = 'folder'
+        title: isUnread ? 'ChatList.UnreadOnly.Empty' : 'FilterNoChatsToDisplay',
+        subtitle: isUnread ? 'ChatList.UnreadOnly.EmptyInfo' : 'FilterNoChatsToDisplayInfo',
+        classNameType: 'folder'
       });
 
       placeholderContainer = placeholder.container;
@@ -1907,12 +1475,14 @@ export class AppDialogsManager {
 
       placeholderContainer.prepend(div);
 
-      const button = Button('btn-primary btn-color-primary btn-control', {
+      const button = Button('btn-primary btn-color-primary btn-control', isUnread ? {
+        text: 'ChatList.ShowAllChats'
+      } : {
         text: 'FilterHeaderEdit',
         icon: 'settings'
       });
 
-      attachClickEvent(button, async() => {
+      attachClickEvent(button, isUnread ? () => this.showAllChatsFrom(button) : async() => {
         const filter = await this.managers.filtersStorage.getFilter(this.filterId);
         appSidebarLeft.createTab(AppEditFolderTab).open({...AppEditFolderTab.getInitArgs(), initFilter: filter});
       });
@@ -1983,7 +1553,8 @@ export class AppDialogsManager {
     // return;
     const count = this.xd?.sortedList.itemsLength() || 0;
 
-    if(count >= MIN_DIALOGS_WITHOUT_CONTACTS) {
+    // * a short list of unread chats is not a short list of chats: no contacts to start one with
+    if(count >= MIN_DIALOGS_WITHOUT_CONTACTS || useChatListUnreadOnly()[0]()) {
       if(this.contactsPlaceholder) {
         this.removeContactsPlaceholder();
       }
@@ -2093,9 +1664,13 @@ export class AppDialogsManager {
     asInnerIfAsMessages?: boolean,
     ForumTabConstructorOverride?: typeof ForumTab
   ) {
+    // * the forum opens for the account it was asked on, and not at all once the tab is on another: a run
+    // * queued behind another one for the same peer included
+    const managers = bindManagersToSession(this.managers);
     const previousPromise = this.forumTabByPeerIdPromises.get(peerId);
     const run = () => this.toggleForumTabByPeerIdInternal(
       peerId,
+      managers,
       show,
       asInnerIfAsMessages,
       ForumTabConstructorOverride
@@ -2116,14 +1691,19 @@ export class AppDialogsManager {
 
   private async toggleForumTabByPeerIdInternal(
     peerId: PeerId,
+    managers: AppManagers,
     show?: boolean,
     asInnerIfAsMessages?: boolean,
     ForumTabConstructorOverride?: typeof ForumTab
   ) {
+    if(isSessionLeaving(getManagersSession(managers))) {
+      return;
+    }
+
     if(peerId === rootScope.myId) {
       const tab = appSidebarLeft.getTab(AppSharedMediaTab);
       if(show === true || (show === undefined && !tab)) {
-        AppSharedMediaTab.open(appSidebarLeft, peerId, true);
+        AppSharedMediaTab.open(appSidebarLeft, peerId, {noProfile: true});
       } else {
         if(tab?.peerId === peerId) {
           tab.close();
@@ -2135,7 +1715,6 @@ export class AppDialogsManager {
       return;
     }
 
-    const {managers} = this;
     const chat = !peerId.isUser() ?
       apiManagerProxy.getChat(peerId.toChatId()) :
       undefined;
@@ -2234,7 +1813,7 @@ export class AppDialogsManager {
       this.forumsTabs.set(peerId, forumTab);
       this.forumsSlider.append(forumTab.container);
 
-      forumTab.managers = this.managers;
+      forumTab.managers = managers;
       forumTab.eventListener.addEventListener('destroy', () => {
         this.forumsTabs.delete(peerId);
       });
@@ -2371,6 +1950,12 @@ export class AppDialogsManager {
         return;
       }
 
+      if(e.ctrlKey || e.metaKey) {
+        this.openDialogInNewTab(elem);
+        cancelEvent(e);
+        return;
+      }
+
       const community = !peerId.isUser() ?
         apiManagerProxy.getChat(peerId.toChatId()) :
         undefined;
@@ -2379,12 +1964,6 @@ export class AppDialogsManager {
         !community.pFlags.left &&
         !threadId
       ) {
-        if(e.ctrlKey || e.metaKey) {
-          this.openDialogInNewTab(elem);
-          cancelEvent(e);
-          return;
-        }
-
         const isFromRightSidebar = appSidebarRight.sidebarEl.contains(elem);
         this.toggleForumTabByPeerId(
           peerId,
@@ -2439,13 +2018,6 @@ export class AppDialogsManager {
       const isForum = !!elem.querySelector('.is-forum');
       if(isForum && !e.shiftKey && !lastMsgId) {
         this.toggleForumTabByPeerId(peerId, undefined, false);
-        return;
-      }
-
-      if(e.ctrlKey || e.metaKey) {
-        // TODO: How about opening a monoforum in new tab?
-        this.openDialogInNewTab(elem);
-        cancelEvent(e);
         return;
       }
 
@@ -2785,6 +2357,11 @@ export class AppDialogsManager {
     let renderedParts = canSkipRender ? previousRenderParts : undefined;
 
     if(!canSkipRender && !keepTyping) {
+      // * what this render wraps lives as long as it is the row's subtitle, or the row: a custom emoji
+      // * renderer was released only by leaving the document, so one that never got there - a render
+      // * a newer one replaced, a row dropped before it was shown - kept its emoji in the global
+      // * lazy-load queue for good
+      const subtitleMiddlewareHelper = dialogElement.middlewareHelper?.get().create();
       let mediaContainer: HTMLElement;
       const mediaParts: (Promise<HTMLElement> | HTMLElement)[] = [];
 
@@ -2816,7 +2393,7 @@ export class AppDialogsManager {
                   width: 20,
                   height: 20,
                   multiply: 0.1,
-                  middleware: this.stateMiddlewareHelper.get(),
+                  middleware: subtitleMiddlewareHelper?.get() ?? this.stateMiddlewareHelper.get(),
                   animationGroup: 'none'
                 }).then((el) => {
                   mediaContainer.append(el);
@@ -2836,26 +2413,33 @@ export class AppDialogsManager {
       }
 
       const withoutMediaType = !!mediaContainer && !!(lastMessage as Message.message)?.message;
-      const parts = await renderDialogSubtitleParts({
-        peerId,
-        isSaved,
-        lastMessage,
-        draftMessage,
-        noForwardIcon,
-        mediaParts,
-        withoutMediaType,
-        withoutMessageIcon: !!mediaContainer,
-        prependPeerId: subtitlePeerId,
-        middleware,
-        messageRenderer: wrapMessageForReply,
-        peerTitleRenderer: wrapPeerTitle,
-        textColor: this.getTextColor(
-          dom.listEl.classList.contains('active')
-        )
-      });
+      let parts: HTMLElement[];
+      try {
+        parts = await renderDialogSubtitleParts({
+          peerId,
+          isSaved,
+          lastMessage,
+          draftMessage,
+          noForwardIcon,
+          mediaParts,
+          withoutMediaType,
+          withoutMessageIcon: !!mediaContainer,
+          prependPeerId: subtitlePeerId,
+          middleware,
+          wrapMiddleware: subtitleMiddlewareHelper?.get(),
+          messageRenderer: wrapMessageForReply,
+          peerTitleRenderer: wrapPeerTitle,
+          textColor: this.getTextColor(
+            dom.listEl.classList.contains('active')
+          )
+        });
+      } catch(err) {
+        subtitleMiddlewareHelper?.destroy();
+        throw err;
+      }
       dom.lastMessageSpan.classList.add('dialog-subtitle-parts');
       disposeTextHighlight(dom);
-      setDialogSubtitle(dom, parts);
+      setDialogSubtitle(dom, parts, subtitleMiddlewareHelper);
       renderedParts = parts;
 
       // * the last part is the message text itself (the ones before are the sender, the
@@ -3046,10 +2630,11 @@ export class AppDialogsManager {
   }
 
   private async getDialog(dialog: AnyDialog | PeerId, {threadOrSavedId, monoforumParentPeerId}: GetDialogOptions = {}) {
+    const managers = bindManagersToSession(this.managers);
     if(typeof(dialog) !== 'object') {
       let originalDialog: AnyDialog | MonoforumDialog;
       if(monoforumParentPeerId) {
-        originalDialog = await this.managers.monoforumDialogsStorage.getDialogByParent(monoforumParentPeerId, dialog);
+        originalDialog = await managers.monoforumDialogsStorage.getDialogByParent(monoforumParentPeerId, dialog);
 
         if(!originalDialog) return {
           peerId: dialog || NULL_PEER_ID,
@@ -3057,7 +2642,7 @@ export class AppDialogsManager {
         } as MonoforumDialog;
       } else if(threadOrSavedId) {
         if(dialog === rootScope.myId) {
-          originalDialog = await this.managers.dialogsStorage.getAnyDialog(dialog, threadOrSavedId);
+          originalDialog = await managers.dialogsStorage.getAnyDialog(dialog, threadOrSavedId);
           if(!originalDialog) {
             const peerId = dialog || NULL_PEER_ID;
             return {
@@ -3066,7 +2651,7 @@ export class AppDialogsManager {
             } as any as SavedDialog;
           }
         } else {
-          originalDialog = await this.managers.dialogsStorage.getForumTopic(dialog, threadOrSavedId);
+          originalDialog = await managers.dialogsStorage.getForumTopic(dialog, threadOrSavedId);
           if(!originalDialog) {
             const peerId = dialog || NULL_PEER_ID;
             return {
@@ -3076,12 +2661,12 @@ export class AppDialogsManager {
           }
         }
       } else {
-        originalDialog = await this.managers.appMessagesManager.getDialogOnly(dialog);
+        originalDialog = await managers.appMessagesManager.getDialogOnly(dialog);
         if(!originalDialog) {
           const peerId = dialog || NULL_PEER_ID;
           return {
             peerId,
-            peer: await this.managers.appPeersManager.getOutputPeer(peerId),
+            peer: await managers.appPeersManager.getOutputPeer(peerId),
             pFlags: {}
           } as any as Dialog;
         }
@@ -3110,6 +2695,7 @@ export class AppDialogsManager {
       const lazyLoadElement: Parameters<AppDialogsManager['lazyLoadQueue']['push']>[0] = {
         div,
         load: async() => {
+          const managers = bindManagersToSession(this.managers);
           await pause(200);
           if(!this.lazyLoadQueue.intersector.isVisible(div)) {
             this.lazyLoadQueue.push(lazyLoadElement); // * to process again
@@ -3123,14 +2709,14 @@ export class AppDialogsManager {
             limit: 50
           };
 
-          const readMaxId = await this.managers.appMessagesManager.getReadMaxIdIfUnread(
+          const readMaxId = await managers.appMessagesManager.getReadMaxIdIfUnread(
             options.peerId,
             options.threadId
           );
 
           if(readMaxId) {
             const limit = Math.floor(getHistoryOptions.limit / 2);
-            await this.managers.appMessagesManager.getHistory({
+            await managers.appMessagesManager.getHistory({
               ...getHistoryOptions,
               offsetId: readMaxId || undefined,
               backLimit: readMaxId ? limit : undefined,
@@ -3138,7 +2724,7 @@ export class AppDialogsManager {
             });
           }
 
-          return this.managers.appMessagesManager.getHistory(getHistoryOptions);
+          return managers.appMessagesManager.getHistory(getHistoryOptions);
         }
       };
 
@@ -3152,6 +2738,7 @@ export class AppDialogsManager {
   }
 
   public initDialog(dialogElement: DialogElement, options: Parameters<AppDialogsManager['addDialogNew']>[0] & InitDialogAdditionalOptions) {
+    const managers = bindManagersToSession(this.managers);
     const {peerId} = options;
     const getDialogPromise = this.getDialog(options.dialog || peerId, {
       threadOrSavedId: options.threadId,
@@ -3166,7 +2753,7 @@ export class AppDialogsManager {
       }
 
       if(peerId !== rootScope.myId && isUser) {
-        promises.push(this.managers.appUsersManager.getUserStatus(peerId.toUserId()).then((status) => {
+        promises.push(managers.appUsersManager.getUserStatus(peerId.toUserId()).then((status) => {
           if(status?._ === 'userStatusOnline') {
             this.xd.setOnlineStatus(dialogElement.dom.avatarEl.node, true);
           }
@@ -3246,6 +2833,7 @@ export class AppDialogsManager {
   }
 
   private showPollCancelConfirmation(randomId: string) {
+    const managers = bindManagersToSession(this.managers);
     const listenerSetter = new ListenerSetter;
     let popup: PopupPeerHandle;
 
@@ -3272,7 +2860,7 @@ export class AppDialogsManager {
         popup = p;
       }
     }).then(() => {
-      this.managers.appMessagesManager.cancelPendingMessage(randomId).then((wasCanceled) => {
+      managers.appMessagesManager.cancelPendingMessage(randomId).then((wasCanceled) => {
         if(!wasCanceled) {
           onSent();
         }
@@ -3283,6 +2871,10 @@ export class AppDialogsManager {
   }
 }
 
+// made once: a hot update keeps it and moves it onto the edited class (see @helpers/hotRegistry)
 const appDialogsManager = new AppDialogsManager();
 MOUNT_CLASS_TO.appDialogsManager = appDialogsManager;
+registerHotReloadGuard({appDialogsManager});
 export default appDialogsManager;
+
+if(import.meta.hot) import.meta.hot.accept();
