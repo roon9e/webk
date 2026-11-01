@@ -13,7 +13,7 @@ const LANG_PACK_VERSION_KEY = PREFIX + 'LANG_PACK_VERSION';
 
 console.log('Change version to:', {version, changelog, langVersion});
 
-// `.env` is tracked in git, so a clean checkout always has it.
+// `.env` is local (copy .env.example), so it is read and written back here.
 const envString = fs.readFileSync('./.env', 'utf8');
 const env = {};
 envString.split('\n').forEach(line => {

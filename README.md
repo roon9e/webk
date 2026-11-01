@@ -22,11 +22,13 @@ Run `node build` to build the minimized production version of the app. Copy `pub
 ### Running in docker
 
 #### Quick Start (Production Prebuilt Image — No build required):
-Download the configuration files:
+Download the compose file and the configuration template:
 ```bash
-curl -o docker-compose.yml https://raw.githubusercontent.com/roon9e/webk/master/docker-compose.yml
-curl -o .env https://raw.githubusercontent.com/roon9e/webk/master/.env
+curl -o docker-compose.yaml https://raw.githubusercontent.com/roon9e/webk/master/docker-compose.yaml
+curl -o .env.example https://raw.githubusercontent.com/roon9e/webk/master/.env.example
+cp .env.example .env
 ```
+`.env` is not tracked in git — edit it for your deployment (branding, DC, port).
 
 Run the container and check logs:
 ```bash
@@ -36,13 +38,13 @@ docker compose logs -f
 Open http://localhost:80/ in your browser.
 
 #### Developing / Building locally:
-To develop or build from source, uncomment the development services or `build:` section in `docker-compose.yml`:
+To develop or build from source, uncomment the development services or `build:` section in `docker-compose.yaml`:
 * Install dependencies: `docker compose up tweb.dependencies`
 * Run develop container: `docker compose up tweb.develop`
 * Open http://localhost:8080/ in your browser.
-* Or build the production image manually:
+* Or build the production image from the local `.env` (it passes every `VITE_*` as a build arg):
   ```bash
-  docker build -f ./.docker/Dockerfile_production -t ghcr.io/roon9e/webk:latest .
+  docker compose build tweb.production
   ```
 
 ### Dependencies

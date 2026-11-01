@@ -1,8 +1,10 @@
 import type {Chat, StoryItem, User} from '@layer';
 import getPeerActiveUsernames from '@appManagers/utils/peers/getPeerActiveUsernames';
 
+const shortDomain = import.meta.env.VITE_SHORT_DOMAIN || 't.me';
+
 export function makeStoryLink(username: string, storyId: number) {
-  return `https://t.me/${username}/s/${storyId}`;
+  return `https://${shortDomain}/${username}/s/${storyId}`;
 }
 
 /**

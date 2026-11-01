@@ -16,8 +16,11 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches/ ./patches/
 RUN pnpm install --frozen-lockfile
 
-# Branding. These are compile-time (Vite inlines import.meta.env.VITE_*), so the
-# image is Teleram-branded; .env itself is never copied into the image.
+# Configuration. Every VITE_* is read at build time — Vite inlines
+# import.meta.env and format-lang reads process.env — and .env is not committed,
+# so the whole set comes in as build args. docker-compose passes them from the
+# local .env; CI passes them from a repository secret and falls back to the
+# committed .env.example (see .github/workflows/production-image.yml).
 ARG VITE_RSA_MODULUS
 ARG VITE_RSA_TEST_MODULUS
 ARG VITE_BASE_DC_ID
@@ -27,6 +30,21 @@ ARG VITE_ALLOWED_HOSTS
 ARG VITE_APP_NAME
 ARG VITE_APP_PROTOCOL
 ARG VITE_SHORT_DOMAIN
+ARG VITE_API_ID
+ARG VITE_API_HASH
+ARG VITE_PUSH_SERVER_KEY
+ARG VITE_VERSION
+ARG VITE_VERSION_FULL
+ARG VITE_BUILD
+ARG VITE_LANG_PACK_VERSION
+ARG VITE_MTPROTO_WORKER
+ARG VITE_MTPROTO_SW
+ARG VITE_MTPROTO_HTTP
+ARG VITE_MTPROTO_HTTP_UPLOAD
+ARG VITE_MTPROTO_AUTO
+ARG VITE_MTPROTO_HAS_HTTP
+ARG VITE_MTPROTO_HAS_WS
+ARG VITE_SAFARI_PROXY_WEBSOCKET
 
 ENV VITE_RSA_MODULUS=$VITE_RSA_MODULUS \
     VITE_RSA_TEST_MODULUS=$VITE_RSA_TEST_MODULUS \
@@ -36,16 +54,24 @@ ENV VITE_RSA_MODULUS=$VITE_RSA_MODULUS \
     VITE_ALLOWED_HOSTS=$VITE_ALLOWED_HOSTS \
     VITE_APP_NAME=$VITE_APP_NAME \
     VITE_APP_PROTOCOL=$VITE_APP_PROTOCOL \
-    VITE_SHORT_DOMAIN=$VITE_SHORT_DOMAIN
+    VITE_SHORT_DOMAIN=$VITE_SHORT_DOMAIN \
+    VITE_API_ID=$VITE_API_ID \
+    VITE_API_HASH=$VITE_API_HASH \
+    VITE_PUSH_SERVER_KEY=$VITE_PUSH_SERVER_KEY \
+    VITE_VERSION=$VITE_VERSION \
+    VITE_VERSION_FULL="$VITE_VERSION_FULL" \
+    VITE_BUILD=$VITE_BUILD \
+    VITE_LANG_PACK_VERSION=$VITE_LANG_PACK_VERSION \
+    VITE_MTPROTO_WORKER=$VITE_MTPROTO_WORKER \
+    VITE_MTPROTO_SW=$VITE_MTPROTO_SW \
+    VITE_MTPROTO_HTTP=$VITE_MTPROTO_HTTP \
+    VITE_MTPROTO_HTTP_UPLOAD=$VITE_MTPROTO_HTTP_UPLOAD \
+    VITE_MTPROTO_AUTO=$VITE_MTPROTO_AUTO \
+    VITE_MTPROTO_HAS_HTTP=$VITE_MTPROTO_HAS_HTTP \
+    VITE_MTPROTO_HAS_WS=$VITE_MTPROTO_HAS_WS \
+    VITE_SAFARI_PROXY_WEBSOCKET=$VITE_SAFARI_PROXY_WEBSOCKET
 
 COPY . .
-
-# The deployment config, for the builder only. Vite's loadEnv fills every
-# VITE_* from it — the transport switches (VITE_MTPROTO_*), the API
-# credentials and the version numbers are NOT build ARGs, and without them the
-# client cannot build a single transport. The runtime stage copies dist/ and
-# not the context, so this file never leaves the builder.
-COPY .env ./.env
 
 # Build the bundle.
 #

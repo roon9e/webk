@@ -21,11 +21,10 @@ public/*
 !public/changelogs
 !public/changelogs/**
 
-# Deployment config, and it IS tracked in git: the builder needs it (Vite reads
-# every VITE_* from it; only the branding ones are also passed as ARGs) and CI
-# has no other source. The runtime stage copies dist/, not the build context, so
-# the file stops at the builder and never reaches a runtime layer.
-!.env
+# The deployment config is local (copy .env.example), and every value in it
+# reaches the builder as a build ARG, so the file itself never enters the build
+# context.
+.env
 
 # VCS, CI and agent tooling state.
 .git

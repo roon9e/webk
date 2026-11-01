@@ -15,6 +15,8 @@ stats.html
 ssh.json
 archive.zip
 .idea
+# Deployment config is local: copy .env.example and fill it in. Never committed.
+.env
 .env.local
 src/langPackLocalVersion.ts
 /.ai

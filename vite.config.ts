@@ -26,8 +26,8 @@ const {watchScssTypes} = require('./scss-types.js') as typeof import('./scss-typ
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
-// Branding comes from .env, which is tracked in git: the host the app answers
-// on, the product name, and the origin every absolute link is built against.
+// Branding comes from .env (local, copied from .env.example): the host the app
+// answers on, the product name, and the origin every absolute link is built against.
 const mode = process.env.NODE_ENV || 'development';
 const currentEnv = loadEnv(mode, process.cwd(), '');
 
